@@ -1,4 +1,4 @@
-# Backend Setup
+ko# Backend Setup
 
 ## Prerequisites
 
@@ -92,5 +92,3 @@ JWT_SECRET=your_jwt_secret_key
 - Use `docker stop [your-container-name]` to stop the container when not in use.
 
 ---
-
-This README provides a structured setup guide for your backend. Let me know if you need further enhancements!
