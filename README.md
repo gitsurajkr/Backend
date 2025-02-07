@@ -15,10 +15,14 @@ Ensure you have the following installed on your system:
    ```sh
    npm install -g yarn
    ```
+
 2. Install all dependencies:
+
    ```sh
    yarn install
-   
+
+
+   ```
 
 3. Start the development server:
    ```sh
