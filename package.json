@@ -1,12 +1,12 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.ts",
   "repository": "git@github.com:gitsurajkr/Backend.git",
   "author": "Suraj Kumar <kumarsuraj.islampur@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon --ext ts --exec ts-node src/index.ts",
+    "dev": "nodemon --ext ts --exec ts-node src/server.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --write .",
@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "dotenv": "^16.4.7",
+    "express": "^4.21.2",
     "pg": "^8.13.1",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.5",

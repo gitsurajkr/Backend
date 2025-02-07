@@ -11,7 +11,7 @@ import prettierConfig from 'eslint-config-prettier';
 /** @type {import("eslint").FlatConfig[]} */
 export default [
   {
-    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
+    files: ['**/*.{,mjs,cjs,ts,tsx}'],
     ignores: ['node_modules/', 'dist/', 'build/'], // Replace .eslintignore
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
