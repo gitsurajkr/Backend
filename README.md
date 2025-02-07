@@ -1,4 +1,4 @@
-ko# Backend Setup
+## Backend Setup
 
 ## Prerequisites
 
