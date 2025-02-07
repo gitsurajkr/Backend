@@ -11,11 +11,16 @@ Ensure you have the following installed on your system:
 ## Running the Server
 
 1. Install **Yarn** globally:
+
    ```sh
    npm install -g yarn
    ```
+2. Install all dependencies:
+   ```sh
+   yarn install
+   
 
-2. Start the development server:
+3. Start the development server:
    ```sh
    yarn run dev
    ```
@@ -25,9 +30,11 @@ Ensure you have the following installed on your system:
 To use PostgreSQL locally during development, follow these steps:
 
 ### 1. Install Docker
+
 - Download and install [Docker](https://www.docker.com/get-started) on your system.
 
 ### 2. Start a PostgreSQL Container
+
 Run the following command to set up a PostgreSQL instance inside Docker:
 
 ```sh
@@ -38,6 +45,7 @@ docker run --name [your-container-name] \
 ```
 
 Example:
+
 ```sh
 docker run --name mypostgres \
   -e POSTGRES_PASSWORD=mysecretpassword \
@@ -46,6 +54,7 @@ docker run --name mypostgres \
 ```
 
 ### 3. Connect to the Database
+
 Use the following command to connect via `psql`:
 
 ```sh
@@ -53,6 +62,7 @@ psql -h localhost -p [your-port] -U [your-username] -d [your-database-name]
 ```
 
 Example:
+
 ```sh
 psql -h localhost -p 5432 -U postgres -d clothbuddy_backend
 ```
@@ -72,10 +82,11 @@ JWT_SECRET=your_jwt_secret_key
 ```
 
 ## Additional Notes
+
 - Ensure Docker is running before executing database commands.
 - Use `docker ps` to check if the PostgreSQL container is running.
 - Use `docker stop [your-container-name]` to stop the container when not in use.
 
 ---
-This README provides a structured setup guide for your backend. Let me know if you need further enhancements!
 
+This README provides a structured setup guide for your backend. Let me know if you need further enhancements!
