@@ -124,5 +124,3 @@ DATABASE_URL="postgresql://postgres:mysecretpassword@localhost:5432/clothbuddy_b
 - Use `docker stop [your-container-name]` to stop the container when not in use.
 - Use `docker start [your-container-name]` to start the container when needed.
 - Use `yarn prisma studio` to explore the database visually.
-
-
