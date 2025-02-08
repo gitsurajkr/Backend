@@ -48,8 +48,7 @@ const userSignup: RequestHandler = async (req: Request, res: Response) => {
         },
       });
     } else if (role === "seller") {
-      const { storeName, gstNumber, adharNumber, panCardNumber } =
-        validateBody.data;
+      const { storeName, gstNumber, adharNumber, panCardNumber } = validateBody.data;
       await prisma.seller.create({
         data: {
           user: { connect: { id: user.id } },
@@ -63,20 +62,14 @@ const userSignup: RequestHandler = async (req: Request, res: Response) => {
 
     console.log("User created successfully", user);
 
-    const token = jwt.sign(
-      { userId: user.id, role },
-      process.env.JWT_SECRET as string,
-      {
-        expiresIn: "1d",
-      }
-    );
+    const token = jwt.sign({ userId: user.id, role }, process.env.JWT_SECRET as string, {
+      expiresIn: "1d",
+    });
 
     res.status(201).json({ message: "User created successfully", token });
   } catch (error) {
     console.error("Error creating user", error);
-    res
-      .status(400)
-      .json({ message: "Sign-up error", error: (error as Error).message });
+    res.status(400).json({ message: "Sign-up error", error: (error as Error).message });
   }
 };
 
