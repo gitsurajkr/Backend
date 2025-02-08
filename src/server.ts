@@ -1,18 +1,17 @@
-import express from 'express';
-import sequelize from './config/database';
+import express from "express";
+import dotenv from "dotenv";
+import router from "./routes/index";
+
+dotenv.config();
 
 const app = express();
+const PORT = 3000;
+
+// Middlewares
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-const PORT = process.env.PORT || 5000;
-
-sequelize
-  .authenticate()
-  .then(() => console.log('Database connected...'))
-  .catch((err) => console.error('Database connection error:', err));
-
-sequelize.sync({ force: false }).then(() => {
-  console.log('Tables created successfully!');
-});
+// routes
+app.use("/api", router);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
