@@ -19,14 +19,13 @@
 //   }
 // };
 
-import { Response, NextFunction } from "express";
-import { signInService } from "../services/auth.service";
-import { ExpressHandler, AuthRequest } from "../types/express";
+import { RequestHandler } from "express";
+import { loginService } from "../services/auth.service";
 
 /**
  * Handles user login with Supabase authentication.
  */
-export const loginUser: ExpressHandler = async (req: AuthRequest, res: Response, next: NextFunction) => {
+export const loginUser: RequestHandler = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -34,7 +33,7 @@ export const loginUser: ExpressHandler = async (req: AuthRequest, res: Response,
       return;
     }
 
-    const { data, error } = await signInService(email, password);
+    const { data, error } = await loginService(email, password);
 
     if (error) {
       res.status(401).json({ error: error.message });
@@ -42,7 +41,7 @@ export const loginUser: ExpressHandler = async (req: AuthRequest, res: Response,
     }
 
     res.status(200).json({ message: "Login successful", user: data.user, session: data.session });
-  } catch (error) {
+  } catch (_error) {
     res.status(500).json({ error: "Login failed" });
   }
 };
