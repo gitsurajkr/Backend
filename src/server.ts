@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import router from "./routes/index";
+import userRouter from "./routes/user.routes";
 
 dotenv.config();
 
@@ -10,6 +11,7 @@ const PORT = 3000;
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use("/api/user", userRouter);
 
 // routes
 app.use("/api", router);
