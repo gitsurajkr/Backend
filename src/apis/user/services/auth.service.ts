@@ -20,3 +20,9 @@ export const loginService = async (email: string, password: string) => {
 export const verifyUserService = async (token: string) => {
   return await supabase.auth.getUser(token);
 };
+/**
+ * Deletes a user from Supabase authentication.
+ */
+export const removeUserService = async (userId: string) => {
+  return await supabase.auth.admin.deleteUser(userId);
+};
