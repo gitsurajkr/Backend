@@ -8,10 +8,13 @@
 
 import express from "express";
 import userRoutes from "./user.routes";
+import cartRoutes from "./cart.routes";
 
 const router = express.Router();
 
 //user routes
 router.use("/user", userRoutes);
+//cart routes
+router.use("/carts", cartRoutes);
 
 export default router;
