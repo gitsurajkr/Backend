@@ -24,6 +24,7 @@ model User {
   Buyer  Buyer?
   Seller Seller?
   cart   Cart?   @relation("UserCart")
+  orders Order[]
 
   @@map("users")
 }
@@ -57,4 +58,17 @@ model Cart {
 
   // Relations
   user User @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  userId      Int
+  items       Json
+  totalAmount Float
+  status      String   @default("pending") // pending, confirmed, shipped, delivered, canceled
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

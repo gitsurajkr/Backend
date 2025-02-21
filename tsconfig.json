@@ -111,6 +111,7 @@
   "include": [
     "src/types/**/*.ts",
     "src/types/**/*.d.ts",
-    "src/apis/**/*.ts"
+    "src/apis/**/*.ts",
+    "src/routes/**/*.ts"
   ]
 }

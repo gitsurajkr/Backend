@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
-import { CartController } from "../apis/user/controllers/cart.controller.ts";
-import { authMiddleware } from "../middleware/auth.middleware.ts";
-import { AuthenticatedRequest } from "../types/auth.ts";
+import { CartController } from "../apis/cart/controller/cart.controller";
+import { authMiddleware } from "../middleware/auth.middleware";
+import { AuthenticatedRequest } from "../types/auth";
 
 const router = express.Router();
 
