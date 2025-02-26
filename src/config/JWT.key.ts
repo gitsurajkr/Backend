@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-export default {
-  JWT_SECRET: process.env.JWT_SECRET,
-};
+if (!process.env.JWT_SECRET) {
+  throw new Error("Missing JWT_SECRET in environment variables");
+}
+const JWT_KEY = process.env.JWT_SECRET as string;
+export default JWT_KEY;

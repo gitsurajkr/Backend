@@ -1,8 +1,8 @@
-import { Router } from "express";
-// import { authenticateUser, authorizeRole } from "../middleware/auth.middleware";
+// import { Router } from "express";
+// // import { authenticateUser, authorizeRole } from "../middleware/auth.middleware";
 
-const productRoutes = Router();
+// const productRoutes = Router();
 
-// productRoutes.post("/add-product", authenticateUser, authorizeRole("seller"), addProduct);
+// // productRoutes.post("/add-product", authenticateUser, authorizeRole("seller"), addProduct);
 
-export default productRoutes;
+// export default productRoutes;

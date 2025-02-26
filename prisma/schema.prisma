@@ -13,62 +13,80 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  USER
+  BUYER
+  SELLER
+  ADMIN
+}
+
 model User {
-  id          Int      @id @default(autoincrement())
-  email       String   @unique
-  password    String
-  phoneNumber String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  Buyer  Buyer?
-  Seller Seller?
-  cart   Cart?   @relation("UserCart")
-  orders Order[]
-
-  @@map("users")
-}
-
-model Buyer {
-  id      Int     @id @default(autoincrement())
-  user    User    @relation(fields: [id], references: [id])
-  address String?
-  budget  Float?
-
-  @@map("buyers")
-}
-
-model Seller {
-  id            Int    @id @default(autoincrement())
-  user          User   @relation(fields: [id], references: [id])
-  storeName     String
-  gstNumber     String @unique
-  adharNumber   String @unique
-  panCardNumber String @unique
-
-  @@map("sellers")
-}
-
-model Cart {
-  id        String   @id @default(uuid())
-  userId    Int      @unique
-  items     Json
+  id String @id @default(uuid())
+  email String @unique 
+  name String
+  password String
+  phoneNumber String?
+  refreshTokens RefreshToken[]
+  role          Role         @default(USER)
+  isVerified    Boolean      @default(false)
+  passwordResetToken PasswordResetToken?
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  user User @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
+  Buyer Buyer?   @relation("UserToBuyer")  
+  Seller Seller? @relation("UserToSeller")
 }
 
-model Order {
-  id          String   @id @default(uuid())
-  userId      Int
-  items       Json
-  totalAmount Float
-  status      String   @default("pending") // pending, confirmed, shipped, delivered, canceled
+model RefreshToken{
+  id String @id @default(uuid())
+  token String @unique
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Buyer {
+  id   String @id @default(uuid()) @map("userId")
+  BuyerId String @unique
+  user User   @relation("UserToBuyer", fields: [BuyerId], references: [id])
+  address String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([id]) 
+}
+
+model Seller {
+  id   String @id @default(uuid()) @map("userId")
+  sellerId String @unique
+  user User  @relation("UserToSeller", fields: [sellerId], references: [id])
+
+  storeName   String
+  aadharCard  String @unique 
+  panCard     String @unique 
+  gstNumber   String? @unique 
+  rating      Float?  
+  isVerified  Boolean @default(false) 
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([id]) 
 }
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+
+
+
+

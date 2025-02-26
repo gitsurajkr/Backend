@@ -112,6 +112,8 @@
     "src/types/**/*.ts",
     "src/types/**/*.d.ts",
     "src/apis/**/*.ts",
-    "src/routes/**/*.ts"
+    "src/routes/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.ts"
   ]
 }
