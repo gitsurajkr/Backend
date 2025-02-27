@@ -52,10 +52,13 @@ export const isAdmin = (req: Request, res: Response, next: NextFunction): void =
 };
 
 export const isBuyerOrAdmin = (req: Request, res: Response, next: NextFunction): void => {
-  if (!req.user || (req.user as JwtPayload).role !== "ADMIN" || (req.user as JwtPayload).role !== "BUYER") {
-    res.status(403).json({ message: "Forbidden: Only admins and sellers can access this resource" });
+  console.log("User from Token:", req.user);
+
+  if (!req.user || !["ADMIN", "BUYER"].includes((req.user as JwtPayload).role)) {
+    res.status(403).json({ message: "Forbidden: Only admins and buyers can access this resource" });
     return;
   }
+
   next();
 };
 

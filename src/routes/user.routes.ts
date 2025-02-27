@@ -45,12 +45,13 @@ userRouter.post("/signin", signinUser);
 userRouter.put("/update", authenticateUser, updateUser);
 userRouter.get("/get-user", getUser);
 userRouter.delete("/delete", authenticateUser, isAdmin, deleteUser);
-userRouter.post("/assign-buyer", authenticateUser, assignBuyer);
+userRouter.post("/assign-buyer", authenticateUser, assignBuyer); //check once with put
 userRouter.post("/assign-seller", authenticateUser, assignSeller);
-userRouter.post("/admin/verify-seller", authenticateUser, isAdmin, verifySeller);
+userRouter.put("/admin/verify-seller", authenticateUser, isAdmin, verifySeller);
 userRouter.post("/forgot-password", validateEmail, passwordRequest);
 userRouter.post("/reset-password/:resetToken", validatePassword, updatePassword);
 userRouter.get("/profile", authenticateUser, getUserProfile);
+//get profiile by id
 userRouter.get("/all-sellers", authenticateUser, isBuyerOrAdmin, getAllSellers);
 userRouter.get("/all-buyers", authenticateUser, isAdmin, getAllBuyers);
 userRouter.post("/resend-verification-email", authenticateUser, validateEmail, resendVerificationEmail);

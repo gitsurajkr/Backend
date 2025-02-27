@@ -160,8 +160,10 @@ const registerUser: RequestHandler = async (req: Request, res: Response): Promis
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
     });
+
+    // setup nodemailer to show user register successfully
 
     res.status(201).json({ message: "User registered successfully", accessToken });
   } catch (error) {
@@ -348,7 +350,8 @@ const deleteUser: RequestHandler = async (req: Request, res: Response) => {
     // Start a transaction to delete refresh tokens first, then delete the user
     await prisma.$transaction([
       prisma.refreshToken.deleteMany({ where: { userId: user.id } }),
-      prisma.user.delete({ where: { email } }), // Delete user
+      prisma.seller.deleteMany({ where: { sellerId: user.id } }),
+      prisma.user.delete({ where: { id: user.id } }),
     ]);
 
     res.status(200).json({ message: "User deleted successfully" });
@@ -441,7 +444,7 @@ const assignSeller: RequestHandler = async (req: Request, res: Response): Promis
 
     const { storeName, aadharCard, panCard, gstNumber } = req.body;
 
-    if (!storeName || !aadharCard || !panCard || !gstNumber) {
+    if (!storeName || !aadharCard || !panCard) {
       res.status(400).json({ message: "All fields are required" });
       return;
     }
@@ -492,7 +495,7 @@ const verifySeller: RequestHandler = async (req: Request, res: Response) => {
       return;
     }
 
-    const seller = await prisma.seller.findUnique({ where: { id: user.id } });
+    const seller = await prisma.seller.findUnique({ where: { sellerId: user.id } });
 
     if (!seller) {
       res.status(404).json({ message: "Seller not found" });
@@ -504,10 +507,17 @@ const verifySeller: RequestHandler = async (req: Request, res: Response) => {
       return;
     }
 
-    await prisma.seller.update({
-      where: { id: seller.id },
+    await prisma.user.update({
+      where: { id: user.id },
       data: { isVerified: true },
     });
+    await prisma.seller.update({
+      where: { sellerId: seller.id },
+      data: { isVerified: true },
+    });
+
+    const updatedSeller = await prisma.seller.findUnique({ where: { sellerId: user.id } });
+    console.log("After update:", updatedSeller);
 
     res.status(200).json({ message: "Seller verified successfully" });
   } catch (error) {
@@ -535,8 +545,7 @@ const passwordRequest: RequestHandler = async (req: Request, res: Response): Pro
     const resetToken = crypto.randomBytes(32).toString("hex");
     const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
 
-    // Token expiration (1 hour from now)
-    const expiresAt = new Date(Date.now() + 3600000); // 1 hour
+    const expiresAt = new Date(Date.now() + 3600000);
 
     // Delete existing token if it exists
     await prisma.passwordResetToken.deleteMany({
@@ -558,16 +567,18 @@ const passwordRequest: RequestHandler = async (req: Request, res: Response): Pro
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: process.env.EMAIL,
-        pass: process.env.EMAIL_PASSWORD,
+        user: process.env.GOOGLE_GMAIL,
+        pass: process.env.GOOGLE_APP_PASSWORD,
       },
     });
 
     const mailOptions = {
-      from: process.env.EMAIL,
+      from: process.env.GOOGLE_GMAIL,
       to: user.email,
       subject: "Password Reset Request",
-      html: `<p>Click <a href="${resetLink}">here</a> to reset your password. This link is valid for 1 hour.</p>`,
+      html: `<p>Click <a href="${resetLink}" style="color: blue; text-decoration: underline;">here</a> to reset your password.</p>
+      <p>Or copy and paste this link in your browser:</p>
+      <p><a href="${resetLink}">${resetLink}</a></p>`,
     };
 
     await transporter.sendMail(mailOptions);

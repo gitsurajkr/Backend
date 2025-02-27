@@ -20,6 +20,12 @@ enum Role {
   ADMIN
 }
 
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id String @id @default(uuid())
   email String @unique 
@@ -35,8 +41,10 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  Buyer Buyer?   @relation("UserToBuyer")  
-  Seller Seller? @relation("UserToSeller")
+  Buyer Buyer?  
+  Seller Seller? 
+  Wishlist Wishlist[]
+  Reviews Review[]
 }
 
 model RefreshToken{
@@ -51,7 +59,7 @@ model RefreshToken{
 model Buyer {
   id   String @id @default(uuid()) @map("userId")
   BuyerId String @unique
-  user User   @relation("UserToBuyer", fields: [BuyerId], references: [id])
+  user User   @relation( fields: [BuyerId], references: [id])
   address String
 
   createdAt DateTime @default(now())
@@ -63,7 +71,7 @@ model Buyer {
 model Seller {
   id   String @id @default(uuid()) @map("userId")
   sellerId String @unique
-  user User  @relation("UserToSeller", fields: [sellerId], references: [id])
+  user User  @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   storeName   String
   aadharCard  String @unique 
@@ -71,6 +79,9 @@ model Seller {
   gstNumber   String? @unique 
   rating      Float?  
   isVerified  Boolean @default(false) 
+
+  // Relations
+  products Product[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -86,7 +97,105 @@ model PasswordResetToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model Product {
+  id String @id @default(uuid())
+  title String
+  description String
+  price Float
+  discount Float? @default(0.0)
+  // rating Float    // have to remove these things
+  category String
+  stock Int @default(0)
+  status ProductStatus @default(PENDING)
 
+  sellerId String
+  seller Seller @relation(fields: [sellerId], references: [id])
+  productDetails ProductDetails[]
+  variants ProductVariant[]
+  images ProductImage[]
+  reviews Review[]
+  wishlist Wishlist[]
+  bulkUploaded String?
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  @@index([price])  
+  @@index([sellerId]) 
+  @@index([category])
+  @@index([status])
+}
+
+model ProductDetails {
+  id String @id @default(uuid())
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  fabricType Json
+  origin String
+  closureType String
+  countryOfOrigin String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([countryOfOrigin])  
+}
+
+model ProductVariant {
+  id String @id @default(uuid())
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  color       String
+  size        String
+  stock       Int
+
+  // pattern type  occasssion 
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([size, color])
+}
+
+model ProductImage {
+  id String @id @default(uuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  url        String
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+}
+
+model Wishlist {
+  id String @id @default(uuid())
+  userId String
+  productId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+}
+
+model Review {
+  id String @id @default(uuid())
+  userId String 
+  productId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  rating Float
+  comment String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+}
 
