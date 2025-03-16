@@ -20,12 +20,6 @@ enum Role {
   ADMIN
 }
 
-enum ProductStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 model User {
   id String @id @default(uuid())
   email String @unique 
@@ -61,7 +55,7 @@ model Buyer {
   BuyerId String @unique
   user User   @relation( fields: [BuyerId], references: [id])
   address String
-
+  review Review[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -82,6 +76,7 @@ model Seller {
 
   // Relations
   products Product[]
+  reviews Review[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -97,38 +92,53 @@ model PasswordResetToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
+enum ProductCategory {
+  MENS
+  WOMENS
+  KIDS
+  OTHER
+}
+
 model Product {
-  id String @id @default(uuid())
-  title String
+  id          String           @id @default(uuid())
+  title       String
   description String
-  price Float
-  discount Float? @default(0.0)
-  // rating Float    // have to remove these things
-  category String
-  stock Int @default(0)
-  status ProductStatus @default(PENDING)
+  price       Float
+  discount    Float?           @default(0.0)
+  category    ProductCategory
+  stock       Int              @default(0)
+  status      ProductStatus    @default(PENDING)
 
-  sellerId String
-  seller Seller @relation(fields: [sellerId], references: [id])
-  productDetails ProductDetails[]
-  variants ProductVariant[]
-  images ProductImage[]
-  reviews Review[]
-  wishlist Wishlist[]
-  bulkUploaded String?
+  sellerId    String
+  seller      Seller           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  details     ProductDetails?
+  variants    ProductVariant[]
+  images      ProductImage[]
+  reviews     Review[]
+  wishlist    Wishlist[]
+  bulkUpload  String?
+  specifications Specification?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  @@index([price])  
-  @@index([sellerId]) 
+  @@index([price])
+  @@index([sellerId])
   @@index([category])
   @@index([status])
 }
 
 model ProductDetails {
   id String @id @default(uuid())
-  productId String
+  productId String @unique
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   
   fabricType Json
@@ -143,15 +153,20 @@ model ProductDetails {
 }
 
 model ProductVariant {
-  id String @id @default(uuid())
-  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId String
+  id          String @id @default(uuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   color       String
   size        String
   stock       Int
-
-  // pattern type  occasssion 
+  pattern     String
+  occasion    String
+  sleeveLength String
+  types       String
+  neck        String
+  length      String
+  hemline     String
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -159,16 +174,80 @@ model ProductVariant {
   @@index([size, color])
 }
 
+
+model Specification {
+  id   String @id @default(uuid())
+  productId String @unique
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  upperWear   UpperWear? @relation(name: "UpperWearToSpecification")
+  bottomWear  BottomWear? @relation(name: "BottomWearToSpecification")
+  lowerWear   LowerWear? @relation(name: "LowerWearToSpecification")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UpperWear {
+  id               String  @id @default(uuid())
+  specificationId  String  @unique
+  specification    Specification? @relation(name: "UpperWearToSpecification", fields: [specificationId], references: [id])
+
+  length          String
+  chest           String
+  shoulder        String
+  sleeve          String
+  neck            String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+
+model BottomWear {
+  id            String  @id @default(uuid())
+
+  specification Specification? @relation(name: "BottomWearToSpecification", fields: [specificationId], references: [id])
+  specificationId String @unique
+
+  length        String
+  waist         String
+  hip           String
+  thigh         String
+  knee          String
+  ankle         String
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model LowerWear {
+  id            String  @id @default(uuid())
+
+  specification Specification? @relation(name: "LowerWearToSpecification", fields: [specificationId], references: [id])
+  specificationId String @unique
+
+  length        String
+  waist         String
+  hip           String
+  thigh         String
+  knee          String
+  ankle         String
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+
 model ProductImage {
   id String @id @default(uuid())
-  productId  String
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   
-  url        String
+  url String
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Wishlist {
@@ -187,15 +266,22 @@ model Wishlist {
 model Review {
   id String @id @default(uuid())
   userId String 
+  rating Float
+  review String
+   
+  //  relations
+
   productId String
+  sellerId String
+  buyerId String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  seller  Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  buyer  Buyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  
 
-  rating Float
-  comment String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([productId])
 }
-

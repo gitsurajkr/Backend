@@ -119,3 +119,17 @@ export const validateSellerUpdate = (req: Request, res: Response, next: NextFunc
   }
   next();
 };
+
+export const isSeller = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user || (req.user as JwtPayload).role !== "SELLER") {
+    return res.status(403).json({ message: "Forbidden: Only sellers can add products" });
+  }
+  next();
+};
+
+export const isAdminOrSeller = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user || !["ADMIN", "SELLER"].includes((req.user as JwtPayload).role)) {
+    return res.status(403).json({ message: "Forbidden: Only admins and sellers can perform this action" });
+  }
+  next();
+};

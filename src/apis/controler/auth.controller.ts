@@ -77,14 +77,14 @@ const adminSignIn: RequestHandler = async (req: Request, res: Response): Promise
     const jwtSecret = process.env.JWT_SECRET;
 
     if (!adminEmail || !adminPassword || !jwtSecret) {
-      console.error("❌ Missing admin credentials or JWT_SECRET in environment variables");
+      console.error("Missing admin credentials or JWT_SECRET in environment variables");
       res.status(500).json({ message: "Server misconfiguration" });
       return;
     }
 
     // Check if credentials match environment variables
     if (email !== adminEmail) {
-      console.warn("⚠️ Attempted login with incorrect admin email:", email);
+      console.warn("Attempted login with incorrect admin email:", email);
       res.status(401).json({ message: "Invalid admin credentials" });
       return;
     }
@@ -112,10 +112,10 @@ const adminSignIn: RequestHandler = async (req: Request, res: Response): Promise
       expiresIn: "1h",
     });
 
-    console.log("✅ Admin login successful");
+    console.log("Admin login successful");
     res.status(200).json({ message: "Admin login successful", accessToken });
   } catch (error) {
-    console.error("❌ Error during admin sign-in:", error);
+    console.error("Error during admin sign-in:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
