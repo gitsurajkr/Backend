@@ -127,9 +127,10 @@ export const isSeller = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-export const isAdminOrSeller = (req: Request, res: Response, next: NextFunction) => {
+export const isAdminOrSeller = (req: Request, res: Response, next: NextFunction): void => {
   if (!req.user || !["ADMIN", "SELLER"].includes((req.user as JwtPayload).role)) {
-    return res.status(403).json({ message: "Forbidden: Only admins and sellers can perform this action" });
+    res.status(403).json({ message: "Forbidden: Only admins and sellers can perform this action" });
+    return;
   }
   next();
 };

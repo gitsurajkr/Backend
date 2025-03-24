@@ -1,5 +1,5 @@
-import { Request, Response } from "express";
-import { ProductSchema, querySchema, reviewSchema } from "../../validators/product.validators";
+import { Request, RequestHandler, Response } from "express";
+import { ProductSchema, querySchema } from "../../validators/product.validators";
 import verifyTokenAndGetUser from "../../helper/getUser";
 import { Prisma, PrismaClient, ProductCategory, ProductStatus } from "@prisma/client";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
@@ -11,21 +11,23 @@ const prisma = new PrismaClient();
 const uuidSchema = z.string().uuid();
 const ProductStatusEnum = z.enum(["PENDING", "APPROVED", "REJECTED"]);
 
-const addProduct = async (req: Request, res: Response) => {
+const addProduct: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = req.user as JwtPayload;
 
     if (user.role !== "SELLER") {
-      return res.status(403).json({ error: "Only sellers can add products" });
+      res.status(403).json({ error: "Only sellers can add products" });
+      return;
     }
 
     // Validate request body using Zod
     const validatedBody = ProductSchema.omit({ sellerId: true, status: true }).safeParse(req.body);
 
     if (!validatedBody.success) {
-      return res.status(400).json({
+      res.status(400).json({
         error: validatedBody.error.format(),
       });
+      return;
     }
 
     // Create product in database
@@ -37,7 +39,7 @@ const addProduct = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(201).json({
+    res.status(201).json({
       message: "Product added successfully",
       data: addedProduct,
     });
@@ -45,28 +47,32 @@ const addProduct = async (req: Request, res: Response) => {
     console.error("Error adding product:", error);
 
     if (error instanceof ZodError) {
-      return res.status(400).json({ error: error.format() });
+      res.status(400).json({ error: error.format() });
+      return;
     }
 
     if (error instanceof PrismaClientKnownRequestError) {
       switch (error.code) {
         case "P2002":
-          return res.status(400).json({ error: "A product with this title already exists." });
+          res.status(400).json({ error: "A product with this title already exists." });
+          return;
         case "P2003":
-          return res.status(400).json({ error: "Invalid sellerId. The referenced seller does not exist." });
+          res.status(400).json({ error: "Invalid sellerId. The referenced seller does not exist." });
+          return;
         default:
-          return res.status(500).json({ error: "Database error occurred", details: error.message });
+          res.status(500).json({ error: "Database error occurred", details: error.message });
+          return;
       }
     }
 
-    return res.status(500).json({
+    res.status(500).json({
       error: "Internal Server Error",
       details: error instanceof Error ? error.message : "Unexpected error",
     });
   }
 };
 
-const deleteProductById = async (req: Request, res: Response) => {
+const deleteProductById: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = req.user as JwtPayload;
 
@@ -75,7 +81,8 @@ const deleteProductById = async (req: Request, res: Response) => {
     // Validate Product ID format
     const validProductId = uuidSchema.safeParse(productId);
     if (!validProductId.success) {
-      return res.status(400).json({ error: "Invalid Product ID format" });
+      res.status(400).json({ error: "Invalid Product ID format" });
+      return;
     }
 
     // Check if product exists
@@ -84,29 +91,34 @@ const deleteProductById = async (req: Request, res: Response) => {
     });
 
     if (!product) {
-      return res.status(404).json({ error: "Product not found" });
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
 
     if (user.role !== "ADMIN" && product.sellerId !== user.id) {
-      return res.status(403).json({ error: "Unauthorized: You cannot delete this product" });
+      res.status(403).json({ error: "Unauthorized: You cannot delete this product" });
+      return;
     }
 
     // Delete product
     await prisma.product.delete({ where: { id: productId } });
 
-    return res.status(200).json({ message: "Product deleted successfully" });
+    res.status(200).json({ message: "Product deleted successfully" });
+    return;
   } catch (error) {
     console.error("Error deleting product:", error);
 
     if (error instanceof PrismaClientKnownRequestError && error.code === "P2025") {
-      return res.status(404).json({ error: "Product not found or already deleted" });
+      res.status(404).json({ error: "Product not found or already deleted" });
+      return;
     }
 
-    return res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: "Internal Server Error" });
+    return;
   }
 };
 
-const updateProductById = async (req: Request, res: Response) => {
+const updateProductById: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = req.user as JwtPayload;
     const { productId } = req.params;
@@ -114,24 +126,28 @@ const updateProductById = async (req: Request, res: Response) => {
     // Validate Product ID format
     const validProductId = uuidSchema.safeParse(productId);
     if (!validProductId.success) {
-      return res.status(400).json({ error: "Invalid product ID format" });
+      res.status(400).json({ error: "Invalid product ID format" });
+      return;
     }
 
     // Fetch product
     const product = await prisma.product.findUnique({ where: { id: productId } });
     if (!product) {
-      return res.status(404).json({ error: "Product not found" });
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
 
     // Check if user is authorized (Seller of the product or Admin)
     if (user.role !== "ADMIN" && product.sellerId !== user.id) {
-      return res.status(403).json({ error: "Unauthorized: You cannot update this product" });
+      res.status(403).json({ error: "Unauthorized: You cannot update this product" });
+      return;
     }
 
     // Validate request body
     const validatedBody = ProductSchema.partial().omit({ status: true }).safeParse(req.body);
     if (!validatedBody.success) {
-      return res.status(400).json({ error: validatedBody.error.format() });
+      res.status(400).json({ error: validatedBody.error.format() });
+      return;
     }
 
     const updateData: Partial<typeof validatedBody.data & { status?: ProductStatus }> = { ...validatedBody.data };
@@ -140,7 +156,8 @@ const updateProductById = async (req: Request, res: Response) => {
     if (user.role === "ADMIN" && req.body.status) {
       const statusValidation = ProductStatusEnum.safeParse(req.body.status);
       if (!statusValidation.success) {
-        return res.status(400).json({ error: "Invalid status value" });
+        res.status(400).json({ error: "Invalid status value" });
+        return;
       }
       updateData.status = statusValidation.data as ProductStatus;
     }
@@ -151,38 +168,44 @@ const updateProductById = async (req: Request, res: Response) => {
       data: updateData,
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Product updated successfully",
       data: updatedProduct,
     });
+    return;
   } catch (error) {
     console.error("Error in updating product:", error);
 
     if (error instanceof PrismaClientKnownRequestError && error.code === "P2025") {
-      return res.status(404).json({ error: "Product not found or already deleted" });
+      res.status(404).json({ error: "Product not found or already deleted" });
+      return;
     }
 
-    return res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: "Internal Server Error" });
+    return;
   }
 };
 
-const getAllProducts = async (req: Request, res: Response) => {
+const getAllProducts: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     // Authorization
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     // Validate and parse query parameters
     const validatedQuery = querySchema.safeParse(req.query);
     if (!validatedQuery.success) {
-      return res.status(400).json({ error: validatedQuery.error.errors[0].message });
+      res.status(400).json({ error: validatedQuery.error.errors[0].message });
+      return;
     }
 
     const { page, limit, category, status } = validatedQuery.data;
@@ -195,7 +218,10 @@ const getAllProducts = async (req: Request, res: Response) => {
     if (category) where.category = category;
     if (status) where.status = status;
     if (user.role === "SELLER") where.sellerId = user.id;
-    else if (user.role !== "ADMIN") return res.status(403).json({ error: "Unauthorized: You cannot view products" });
+    else if (user.role !== "ADMIN") {
+      res.status(403).json({ error: "Unauthorized: You cannot view products" });
+      return;
+    }
 
     // Fetch products and total count in a single query
     const [products, totalProducts] = await prisma.$transaction([
@@ -220,7 +246,7 @@ const getAllProducts = async (req: Request, res: Response) => {
       prisma.product.count({ where }),
     ]);
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Products fetched successfully",
       count: products.length,
       totalProducts,
@@ -228,23 +254,26 @@ const getAllProducts = async (req: Request, res: Response) => {
       totalPages: Math.ceil(totalProducts / limitNumber),
       data: products,
     });
+    return;
   } catch (error) {
     console.error("Error fetching products:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-const getProductById = async (req: Request, res: Response) => {
+const getProductById: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     const { productId } = req.params;
@@ -252,7 +281,8 @@ const getProductById = async (req: Request, res: Response) => {
     // Validate productId format
     const validProductId = uuidSchema.safeParse(productId);
     if (!validProductId.success) {
-      return res.status(400).json({ error: "Invalid product ID format" });
+      res.status(400).json({ error: "Invalid product ID format" });
+      return;
     }
 
     // Fetch product with seller details
@@ -276,42 +306,48 @@ const getProductById = async (req: Request, res: Response) => {
     });
 
     if (!product) {
-      return res.status(404).json({ error: "Product not found" });
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
 
     if (user.role !== "ADMIN" && product.seller?.sellerId !== user.id) {
-      return res.status(403).json({ error: "Unauthorized: You cannot view this product" });
+      res.status(403).json({ error: "Unauthorized: You cannot view this product" });
+      return;
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Product fetched successfully",
       data: product,
     });
+    return;
   } catch (error) {
     console.error("Error fetching product:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-const getProductBySellerId = async (req: Request, res: Response) => {
+const getProductBySellerId: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     const { sellerId } = req.params;
 
     if (!uuidSchema.safeParse(sellerId).success) {
-      return res.status(400).json({ error: "Invalid seller ID format" });
+      res.status(400).json({ error: "Invalid seller ID format" });
+      return;
     }
 
     const seller = await prisma.seller.findUnique({
@@ -319,11 +355,13 @@ const getProductBySellerId = async (req: Request, res: Response) => {
     });
 
     if (!seller) {
-      return res.status(404).json({ error: "Seller not found" });
+      res.status(404).json({ error: "Seller not found" });
+      return;
     }
 
     if (user.role !== "ADMIN" && user.id !== seller.sellerId) {
-      return res.status(403).json({ error: "Unauthorized: You cannot access these products" });
+      res.status(403).json({ error: "Unauthorized: You cannot access these products" });
+      return;
     }
 
     const products = await prisma.product.findMany({
@@ -342,41 +380,46 @@ const getProductBySellerId = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "All products fetched successfully",
       count: products.length,
       data: products,
     });
+    return;
   } catch (error) {
     console.error("Error fetching products:", (error as Error).message);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-const getProductByCategory = async (req: Request, res: Response) => {
+const getProductByCategory: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     // Ensure user is verified before allowing access
     if (!user.isVerified) {
-      return res.status(403).json({ error: "Unauthorized: User not verified" });
+      res.status(403).json({ error: "Unauthorized: User not verified" });
+      return;
     }
 
-    const { category } = req.params;
+    const { category } = req.query;
 
     if (!Object.values(ProductCategory).includes(category as ProductCategory)) {
-      return res.status(400).json({ error: "Invalid category provided" });
+      res.status(400).json({ error: "Invalid category provided" });
+      return;
     }
 
     // Fetch products by category
@@ -396,47 +439,54 @@ const getProductByCategory = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "All products fetched successfully",
       count: products.length,
       data: products,
     });
+    return;
   } catch (error) {
     console.error("Error fetching products by category:", (error as Error).message);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-const getProductsByPriceRange = async (req: Request, res: Response) => {
+const getProductsByPriceRange: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     if (!user.isVerified) {
-      return res.status(403).json({ error: "Unauthorized: User not verified" });
+      res.status(403).json({ error: "Unauthorized: User not verified" });
+      return;
     }
 
     const minPrice = req.query.minPrice ? Number(req.query.minPrice) : 0;
     const maxPrice = req.query.maxPrice ? Number(req.query.maxPrice) : Infinity;
 
     if (isNaN(minPrice) || isNaN(maxPrice)) {
-      return res.status(400).json({ error: "Min and Max price must be valid numbers" });
+      res.status(400).json({ error: "Min and Max price must be valid numbers" });
+      return;
     }
     if (minPrice < 0 || maxPrice < 0) {
-      return res.status(400).json({ error: "Prices cannot be negative" });
+      res.status(400).json({ error: "Prices cannot be negative" });
+      return;
     }
     if (minPrice > maxPrice) {
-      return res.status(400).json({ error: "Min price cannot be greater than Max price" });
+      res.status(400).json({ error: "Min price cannot be greater than Max price" });
+      return;
     }
 
     const products = await prisma.product.findMany({
@@ -457,7 +507,7 @@ const getProductsByPriceRange = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Products fetched successfully",
       count: products.length,
       data: products,
@@ -468,29 +518,33 @@ const getProductsByPriceRange = async (req: Request, res: Response) => {
   }
 };
 
-const getProductByName = async (req: Request, res: Response) => {
+const getProductByName: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     if (!user.isVerified) {
-      return res.status(403).json({ error: "Unauthorized: User not verified" });
+      res.status(403).json({ error: "Unauthorized: User not verified" });
+      return;
     }
 
-    const name = req.params.name?.trim();
+    const name = req.query.name?.toString().trim();
 
     if (!name) {
-      return res.status(400).json({ error: "Product name is required" });
+      res.status(400).json({ error: "Product name is required" });
+      return;
     }
 
     // Fetch products by name (case-insensitive search)
@@ -523,10 +577,11 @@ const getProductByName = async (req: Request, res: Response) => {
     });
 
     if (products.length === 0) {
-      return res.status(404).json({ error: "No products found with the given name" });
+      res.status(404).json({ error: "No products found with the given name" });
+      return;
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Products fetched successfully",
       count: products.length,
       data: products,
@@ -601,19 +656,21 @@ const getProductsByPagination = async (req: Request, res: Response) => {
   }
 };
 
-const productSortByPriceOrRating = async (req: Request, res: Response) => {
+const productSortByPriceOrRating: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     const { sortBy, order } = req.query;
@@ -621,7 +678,8 @@ const productSortByPriceOrRating = async (req: Request, res: Response) => {
     // Validate sorting field
     const validSortFields = ["price", "rating"];
     if (!sortBy || !validSortFields.includes(sortBy as string)) {
-      return res.status(400).json({ error: "Invalid sortBy value. Allowed: 'price' or 'rating'" });
+      res.status(400).json({ error: "Invalid sortBy value. Allowed: 'price' or 'rating'" });
+      return;
     }
 
     // Validate order direction
@@ -668,7 +726,7 @@ const productSortByPriceOrRating = async (req: Request, res: Response) => {
       });
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Products fetched successfully",
       count: products.length,
       data: products,
@@ -679,19 +737,21 @@ const productSortByPriceOrRating = async (req: Request, res: Response) => {
   }
 };
 
-const discountProducts = async (req: Request, res: Response) => {
+const discountProducts: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     const page = parseInt(req.query.page as string) || 1;
@@ -724,7 +784,7 @@ const discountProducts = async (req: Request, res: Response) => {
       where: { discount: { gt: 0 }, status: "APPROVED" },
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Products with discounts fetched successfully",
       count: products.length,
       total: totalProducts,
@@ -738,22 +798,25 @@ const discountProducts = async (req: Request, res: Response) => {
   }
 };
 
-const verifyAllProducts = async (req: Request, res: Response) => {
+const verifyAllProducts: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     if (user.role !== "ADMIN") {
-      return res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      return;
     }
 
     const pendingProducts = await prisma.product.findMany({
@@ -762,7 +825,8 @@ const verifyAllProducts = async (req: Request, res: Response) => {
     });
 
     if (pendingProducts.length === 0) {
-      return res.status(400).json({ error: "No pending products to verify" });
+      res.status(400).json({ error: "No pending products to verify" });
+      return;
     }
 
     const updateResult = await prisma.$transaction([
@@ -774,34 +838,38 @@ const verifyAllProducts = async (req: Request, res: Response) => {
 
     console.log(`Verified ${updateResult[0].count} products`);
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "All pending products verified successfully",
       verifiedCount: updateResult[0].count,
       verifiedProducts: pendingProducts,
     });
+    return;
   } catch (error) {
     console.error("Error verifying all products:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-const getAllProductsLeftForVerification = async (req: Request, res: Response) => {
+const getAllProductsLeftForVerification: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     if (user.role !== "ADMIN") {
-      return res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      return;
     }
 
     const page = Math.max(parseInt(req.query.page as string, 10) || 1, 1);
@@ -823,7 +891,8 @@ const getAllProductsLeftForVerification = async (req: Request, res: Response) =>
     const order: "asc" | "desc" = (req.query.order as string)?.toLowerCase() === "desc" ? "desc" : "asc";
 
     if (!validSortFields.includes(sortBy)) {
-      return res.status(400).json({ error: `Invalid sortBy value. Use one of: ${validSortFields.join(", ")}` });
+      res.status(400).json({ error: `Invalid sortBy value. Use one of: ${validSortFields.join(", ")}` });
+      return;
     }
 
     const products = await prisma.product.findMany({
@@ -849,7 +918,7 @@ const getAllProductsLeftForVerification = async (req: Request, res: Response) =>
 
     const totalPending = await prisma.product.count({ where: filters });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Pending products fetched successfully",
       page,
       limit,
@@ -857,29 +926,33 @@ const getAllProductsLeftForVerification = async (req: Request, res: Response) =>
       totalPages: Math.ceil(totalPending / limit),
       data: products,
     });
+    return;
   } catch (error) {
     console.error("Error fetching pending products:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-const verifyProductById = async (req: Request, res: Response) => {
+const verifyProductById: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     if (user.role !== "ADMIN") {
-      return res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      return;
     }
 
     const { id } = req.params;
@@ -889,11 +962,13 @@ const verifyProductById = async (req: Request, res: Response) => {
     });
 
     if (!product) {
-      return res.status(404).json({ error: "Product not found" });
+      res.status(404).json({ error: "Product not found" });
+      return;
     }
 
     if (product.status !== "PENDING") {
-      return res.status(400).json({ error: "Product is already verified" });
+      res.status(400).json({ error: "Product is already verified" });
+      return;
     }
 
     await prisma.product.update({
@@ -901,21 +976,22 @@ const verifyProductById = async (req: Request, res: Response) => {
       data: { status: "APPROVED" },
     });
 
-    return res.status(200).json({ message: "Product verified successfully" });
+    res.status(200).json({ message: "Product verified successfully" });
   } catch (error) {
     console.error("Error verifying product:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-const verifyProductOfSellerEmailByAdmin = async (req: Request, res: Response) => {
+const verifyProductOfSellerEmailByAdmin: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
 
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({
+      res.status(401).json({
         error: "Unauthorized: No token provided",
       });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
@@ -923,11 +999,13 @@ const verifyProductOfSellerEmailByAdmin = async (req: Request, res: Response) =>
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ message: "Unaauthorised: Invalid Token" });
+      res.status(401).json({ message: "Unaauthorised: Invalid Token" });
+      return;
     }
 
     if (user.role !== "ADMIN") {
-      return res.status(403).json({ message: "Forbidden: You cannot access this resource" });
+      res.status(403).json({ message: "Forbidden: You cannot access this resource" });
+      return;
     }
 
     const { email } = req.params;
@@ -937,7 +1015,8 @@ const verifyProductOfSellerEmailByAdmin = async (req: Request, res: Response) =>
     });
 
     if (!seller) {
-      return res.status(404).json({ error: "Seller not found" });
+      res.status(404).json({ error: "Seller not found" });
+      return;
     }
 
     const pendingProducts = await prisma.product.findMany({
@@ -946,14 +1025,15 @@ const verifyProductOfSellerEmailByAdmin = async (req: Request, res: Response) =>
     });
 
     if (pendingProducts.length === 0) {
-      return res.status(404).json({ error: "No pending products found for this seller" });
+      res.status(404).json({ error: "No pending products found for this seller" });
+      return;
     }
 
     const { count } = await prisma.product.updateMany({
       where: { sellerId: seller.id, status: "PENDING" },
       data: { status: "APPROVED" },
     });
-    return res.status(200).json({
+    res.status(200).json({
       message: "All pending products of this seller verified successfully",
       totalVerified: count,
       verifiedProducts: pendingProducts,
@@ -964,30 +1044,34 @@ const verifyProductOfSellerEmailByAdmin = async (req: Request, res: Response) =>
   }
 };
 
-const getProductBySellerWithStatus = async (req: Request, res: Response) => {
+const getProductBySellerWithStatus: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
+      res.status(401).json({ error: "Unauthorized: No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     const { sellerId, status } = req.params;
 
     // Validate sellerId format
     if (!sellerId || !uuidSchema.safeParse(sellerId).success) {
-      return res.status(400).json({ error: "Invalid seller ID format" });
+      res.status(400).json({ error: "Invalid seller ID format" });
+      return;
     }
 
     // Validate status
     if (!status || !Object.values(ProductStatus).includes(status as ProductStatus)) {
-      return res.status(400).json({ error: "Invalid status value" });
+      res.status(400).json({ error: "Invalid status value" });
+      return;
     }
 
     // Find seller
@@ -996,11 +1080,13 @@ const getProductBySellerWithStatus = async (req: Request, res: Response) => {
     });
 
     if (!seller) {
-      return res.status(404).json({ error: "Seller not found" });
+      res.status(404).json({ error: "Seller not found" });
+      return;
     }
 
     if (user.role !== "ADMIN" && user.id !== sellerId) {
-      return res.status(403).json({ error: "Forbidden: You cannot view this seller's products" });
+      res.status(403).json({ error: "Forbidden: You cannot view this seller's products" });
+      return;
     }
 
     // Fetch products
@@ -1020,7 +1106,7 @@ const getProductBySellerWithStatus = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Products fetched successfully",
       count: products.length,
       data: products,
@@ -1031,42 +1117,47 @@ const getProductBySellerWithStatus = async (req: Request, res: Response) => {
   }
 };
 
-const bulkUploadProduct = async (req: Request, res: Response) => {
+const bulkUploadProduct: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     // Extract and validate auth token
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized" });
+      res.status(401).json({ error: "Unauthorized" });
+      return;
     }
     const token = authHeader.split(" ")[1];
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     // Role-based access control
     const allowedRoles = new Set(["ADMIN", "SELLER"]);
     if (!allowedRoles.has(user.role)) {
-      return res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      return;
     }
 
     // Validate request body
     if (!Array.isArray(req.body)) {
-      return res.status(400).json({ error: "Invalid request format: Expected an array of products." });
+      res.status(400).json({ error: "Invalid request format: Expected an array of products." });
+      return;
     }
 
     const ProductArraySchema = z.array(ProductSchema.omit({ sellerId: true, status: true }));
     const validatedBody = ProductArraySchema.safeParse(req.body);
 
     if (!validatedBody.success) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "Invalid product data",
         details: validatedBody.error.issues.map((issue) => ({
           field: issue.path.join("."),
           message: issue.message,
         })),
       });
+      return;
     }
 
     // Attach sellerId and status
@@ -1081,7 +1172,7 @@ const bulkUploadProduct = async (req: Request, res: Response) => {
       products.map((product) => prisma.product.create({ data: product }))
     );
 
-    return res.status(201).json({
+    res.status(201).json({
       message: "Products added successfully",
       data: addedProducts,
     });
@@ -1090,30 +1181,36 @@ const bulkUploadProduct = async (req: Request, res: Response) => {
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2002") {
-        return res.status(400).json({
+        res.status(400).json({
           error: "A product with this title already exists. Please use a different title.",
         });
+        return;
       }
       if (error.code === "P2003") {
-        return res.status(400).json({
+        res.status(400).json({
           error: "Invalid sellerId. The referenced seller does not exist.",
         });
+        return;
+      } else {
+        res.status(500).json({ error: "Database error occurred", details: error.message });
+        return;
       }
-      return res.status(500).json({ error: "Database error occurred", details: error.message });
     }
 
-    return res.status(500).json({
+    res.status(500).json({
       message: "Internal Server Error",
       error: error instanceof Error ? error.message : "Unexpected error",
     });
+    return;
   }
 };
 
-const bulkDeleteProducts = async (req: Request, res: Response) => {
+const bulkDeleteProducts: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized : No token provided" });
+      res.status(401).json({ error: "Unauthorized : No token provided" });
+      return;
     }
 
     const token = authHeader.split(" ")[1];
@@ -1121,30 +1218,29 @@ const bulkDeleteProducts = async (req: Request, res: Response) => {
     const user = await verifyTokenAndGetUser(token);
 
     if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
-    }
-
-    if (user.role !== "ADMIN") {
-      return res.status(403).json({ error: "Forbidden: You cannot access this resource" });
+      res.status(401).json({ error: "Unauthorized: Invalid token" });
+      return;
     }
 
     const { productIds } = req.body;
 
     if (!Array.isArray(productIds)) {
-      return res.status(400).json({ error: "Invalid request format: Expected an array of product IDs." });
+      res.status(400).json({ error: "Invalid request format: Expected an array of product IDs." });
+      return;
     }
 
     const validProductIds = productIds.every((id) => uuidSchema.safeParse(id).success);
 
     if (!validProductIds) {
-      return res.status(400).json({ error: "Invalid product ID format" });
+      res.status(400).json({ error: "Invalid product ID format" });
+      return;
     }
 
     const deleteResult = await prisma.product.deleteMany({
       where: { id: { in: productIds } },
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Products deleted successfully",
       count: deleteResult.count,
     });
@@ -1153,414 +1249,12 @@ const bulkDeleteProducts = async (req: Request, res: Response) => {
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2025") {
-        return res.status(404).json({ error: "Product not found or already deleted" });
+        res.status(404).json({ error: "Product not found or already deleted" });
+        return;
       }
     }
 
     res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
-const addReviewsByBuyer = async (req: Request, res: Response) => {
-  try {
-    const validatedBody = reviewSchema.safeParse(req.body);
-
-    if (!validatedBody.success) {
-      return res.status(400).json({
-        error: "Invalid product data",
-        details: validatedBody.error.issues.map((issue) => ({
-          field: issue.path.join("."),
-          message: issue.message,
-        })),
-      });
-    }
-
-    const { productId, rating, review } = validatedBody.data;
-
-    // check buyer id
-
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: No token provided" });
-    }
-
-    const token = authHeader.split(" ")[1];
-
-    const user = await verifyTokenAndGetUser(token);
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid token" });
-    }
-
-    const buyer = await prisma.buyer.findUnique({
-      where: { BuyerId: user.id },
-    });
-
-    if (!buyer) {
-      return res.status(404).json({ error: "Buyer not found" });
-    }
-
-    // check product id
-
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-    });
-
-    if (!product) {
-      return res.status(404).json({ error: "Product not found" });
-    }
-
-    // check if buyer has already reviewed the product
-
-    const existingReview = await prisma.review.findFirst({
-      where: { productId, buyerId: buyer.id },
-    });
-
-    if (existingReview) {
-      return res.status(400).json({ error: "You have already reviewed this product" });
-    }
-
-    // add review
-
-    const newReview = await prisma.review.create({
-      data: {
-        productId,
-        buyerId: buyer.id,
-        rating,
-        review,
-        userId: user.id,
-        sellerId: product.sellerId,
-      },
-    });
-    console.log("Review added successfully", newReview);
-
-    return res.status(201).json({
-      message: "Review added successfully",
-      data: newReview,
-    });
-  } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError) {
-      return res.status(400).json({ error: "Database error", details: error.message });
-    }
-    console.log(error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
-const getReviewsByProductId = async (req: Request, res: Response) => {
-  try {
-    // Check Authorization Header
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Verify Token
-    const token = authHeader.split(" ")[1];
-    const user = await verifyTokenAndGetUser(token);
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Validate Product ID
-    const { productId } = req.params;
-    const validProductId = uuidSchema.safeParse(productId);
-    if (!validProductId.success) {
-      return res.status(400).json({ error: "Invalid Product ID format" });
-    }
-
-    // Fetch Reviews from Database
-    const reviews = await prisma.review.findMany({
-      where: { productId },
-      select: {
-        id: true,
-        rating: true,
-        review: true,
-        buyer: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                name: true, // Include buyer's username
-              },
-            },
-          },
-        },
-      },
-    });
-
-    // Return Reviews
-    return res.status(200).json({
-      message: "Reviews fetched successfully",
-      data: reviews,
-    });
-  } catch (error) {
-    console.error("Error fetching reviews:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
-const getReviewsByBuyerId = async (req: Request, res: Response) => {
-  try {
-    // Check Authorization Header
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Verify Token
-    const token = authHeader.split(" ")[1];
-    const user = await verifyTokenAndGetUser(token);
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Fetch Buyer ID
-    const buyerId = user.id;
-
-    // Fetch Reviews from Database
-    const reviews = await prisma.review.findMany({
-      where: { buyerId },
-      select: {
-        id: true,
-        rating: true,
-        review: true,
-        productId: true,
-        product: {
-          select: {
-            title: true,
-            sellerId: true,
-          },
-        },
-      },
-    });
-
-    if (reviews.length === 0) {
-      return res.status(200).json({ message: "No reviews found", data: [] });
-    }
-
-    // Return Reviews
-    return res.status(200).json({
-      message: "Reviews fetched successfully",
-      data: reviews,
-    });
-  } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError) {
-      return res.status(400).json({ error: "Database error", details: error.message });
-    }
-    console.error("Error fetching reviews:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
-const deleteReviewById = async (req: Request, res: Response) => {
-  try {
-    // Check Authorization Header
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Verify Token
-    const token = authHeader.split(" ")[1];
-    const user = await verifyTokenAndGetUser(token);
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Fetch Review ID
-    const { reviewId } = req.params;
-    const validReviewId = uuidSchema.safeParse(reviewId);
-    if (!validReviewId.success) {
-      return res.status(400).json({ error: "Invalid Review ID format" });
-    }
-
-    // Fetch Review from Database
-    const review = await prisma.review.findUnique({
-      where: { id: reviewId },
-    });
-
-    if (!review) {
-      return res.status(404).json({ error: "Review not found" });
-    }
-
-    // Check if the review belongs to the user
-    if (review.buyerId !== user.id) {
-      return res.status(403).json({ error: "Forbidden: You cannot delete this review" });
-    }
-
-    // Delete Review
-    await prisma.review.delete({
-      where: { id: reviewId },
-    });
-
-    return res.status(200).json({ message: "Review deleted successfully" });
-  } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError) {
-      return res.status(400).json({ error: "Database error", details: error.message });
-    }
-    console.error("Error deleting review:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
-const updateReviewById = async (req: Request, res: Response) => {
-  try {
-    // Check Authorization Header
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Verify Token
-    const token = authHeader.split(" ")[1];
-    const user = await verifyTokenAndGetUser(token);
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Fetch Review ID
-    const { reviewId } = req.params;
-    const validReviewId = uuidSchema.safeParse(reviewId);
-    if (!validReviewId.success) {
-      return res.status(400).json({ error: "Invalid Review ID format" });
-    }
-
-    // Fetch Review from Database
-    const review = await prisma.review.findUnique({
-      where: { id: reviewId },
-    });
-
-    if (!review) {
-      return res.status(404).json({ error: "Review not found" });
-    }
-
-    // Check if the review belongs to the user
-    if (review.buyerId !== user.id) {
-      return res.status(403).json({ error: "Forbidden: You cannot update this review" });
-    }
-
-    // Validate Request Body
-    const validatedBody = reviewSchema.safeParse(req.body);
-    if (!validatedBody.success) {
-      return res.status(400).json({
-        error: "Invalid review data",
-        details: validatedBody.error.issues.map((issue) => ({
-          field: issue.path.join("."),
-          message: issue.message,
-        })),
-      });
-    }
-
-    // Update Review
-    await prisma.review.update({
-      where: { id: reviewId },
-      data: validatedBody.data,
-    });
-
-    return res.status(200).json({ message: "Review updated successfully" });
-  } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError) {
-      return res.status(400).json({ error: "Database error", details: error.message });
-    }
-    console.error("Error updating review:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
-const getAllReviews = async (req: Request, res: Response) => {
-  try {
-    // Fetch Reviews from Database
-    const reviews = await prisma.review.findMany({
-      select: {
-        id: true,
-        rating: true,
-        review: true,
-        buyer: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        },
-        product: {
-          select: {
-            id: true,
-            title: true,
-            sellerId: true,
-          },
-        },
-      },
-    });
-
-    return res.status(200).json({
-      message: reviews.length ? "Reviews fetched successfully" : "No reviews found",
-      data: reviews,
-    });
-  } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError) {
-      return res.status(400).json({ error: "Database error", details: error.message });
-    }
-    console.error("Error fetching reviews:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
-const getAllReviewsByProductId = async (req: Request, res: Response) => {
-  try {
-    // Check Authorization Header
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Verify Token
-    const token = authHeader.split(" ")[1];
-    const user = await verifyTokenAndGetUser(token);
-    if (!user) {
-      return res.status(401).json({ error: "Unauthorized: Invalid Token" });
-    }
-
-    // Validate Product ID
-    const { productId } = req.params;
-    const validProductId = uuidSchema.safeParse(productId);
-    if (!validProductId.success) {
-      return res.status(400).json({ error: "Invalid Product ID format" });
-    }
-
-    // Fetch Reviews from Database
-    const reviews = await prisma.review.findMany({
-      where: { productId },
-      select: {
-        id: true,
-        rating: true,
-        review: true,
-        buyer: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    // Return Reviews
-    return res.status(200).json({
-      message: "Reviews fetched successfully",
-      data: reviews,
-    });
-  } catch (error) {
-    if (error instanceof PrismaClientKnownRequestError) {
-      return res.status(400).json({ error: "Database error", details: error.message });
-    }
-    console.error("Error fetching reviews:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
@@ -1584,11 +1278,4 @@ export {
   bulkUploadProduct,
   bulkDeleteProducts,
   verifyProductOfSellerEmailByAdmin,
-  getReviewsByProductId,
-  addReviewsByBuyer,
-  getReviewsByBuyerId,
-  deleteReviewById,
-  updateReviewById,
-  getAllReviews,
-  getAllReviewsByProductId,
 };
