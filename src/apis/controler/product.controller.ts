@@ -1258,6 +1258,8 @@ const bulkDeleteProducts: RequestHandler = async (req: Request, res: Response): 
   }
 };
 
+// filter Products
+
 export {
   addProduct,
   deleteProductById,
@@ -1278,4 +1280,7 @@ export {
   bulkUploadProduct,
   bulkDeleteProducts,
   verifyProductOfSellerEmailByAdmin,
+  // filtered Products
+
+  //  check image
 };

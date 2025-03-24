@@ -301,8 +301,10 @@ model Cart{
 }
 
 model CartItems {
+
   id String @id @default(uuid())
   cartId String
+  
   cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
   productId String
