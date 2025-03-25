@@ -1,6 +1,5 @@
 import { Request, RequestHandler, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { create } from "domain";
 const prisma = new PrismaClient();
 
 const addToCart: RequestHandler = async (req: Request, res: Response): Promise<void> => {
@@ -107,18 +106,128 @@ const updateCart: RequestHandler = async (req: Request, res: Response): Promise<
   }
 };
 
+const clearCart: RequestHandler = async (req: Request, res: Response): Promise<void> => {
+  const { userId } = req.params;
+
+  try {
+    const cart = await prisma.cart.findUnique({
+      where: { id: userId },
+      include: { items: true },
+    });
+
+    if (!cart) {
+      res.status(404).json({ message: "Cart not found" });
+      return;
+    }
+    await prisma.cartItems.deleteMany({
+      where: { cartId: userId },
+    });
+
+    await prisma.cart.update({
+      where: { id: userId },
+      data: { totalPrice: 0 },
+    });
+
+    res.status(200).json({ message: "Cart cleared successfully" });
+  } catch (error) {
+    console.log((error as Error).message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const removeItemFromCart: RequestHandler = async (req: Request, res: Response): Promise<void> => {
+  const { userId, productId } = req.params;
+
+  try {
+    const cartItem = await prisma.cartItems.findFirst({
+      where: { cartId: userId, productId },
+    });
+
+    if (!cartItem) {
+      res.status(404).json({ message: "Item not found in the car" });
+      return;
+    }
+
+    // delete the item from the cart
+
+    await prisma.cartItems.delete({
+      where: { id: cartItem.id },
+    });
+
+    const updatedCart = await prisma.cart.findUnique({
+      where: { id: userId },
+      include: { items: true },
+    });
+
+    const totalPrice = updatedCart?.items.reduce((total, item) => total + item.price * item.quantity, 0);
+
+    await prisma.cart.update({
+      where: { id: userId },
+      data: { totalPrice },
+    });
+
+    res.status(200).json({ message: "Item removed Successfully", updatedCart });
+  } catch (error) {
+    console.log((error as Error).message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const getItemsCount: RequestHandler = async (req: Request, res: Response): Promise<void> => {
+  const { userId } = req.params;
+
+  try {
+    const cart = await prisma.cart.findUnique({
+      where: { id: userId },
+      include: { items: true },
+    });
+
+    if (!cart) {
+      res.status(404).json({ message: "Cart not found" });
+      return;
+    }
+
+    const itemsCount = cart.items.reduce((total, item) => total + item.quantity, 0);
+
+    res.status(200).json({ itemsCount });
+  } catch (error) {
+    console.log((error as Error).message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const getCart: RequestHandler = async (req: Request, res: Response): Promise<void> => {
+  const { userId } = req.params;
+
+  try {
+    const cart = await prisma.cart.findUnique({
+      where: { id: userId },
+      include: { items: true },
+    });
+
+    if (!cart) {
+      res.status(404).json({ message: "Cart not found" });
+      return;
+    }
+
+    res.status(200).json(cart);
+  } catch (error) {
+    console.log((error as Error).message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 // add to cart -> done
 // update cart -> done
 // update cart item quantity -> done
-// clear cart
-// remove item from cart
-// get cart items count
-// get cart
+// clear cart -> done
+// remove item from cart -> done
+// get cart items count -> done
+// get cart -> done
 // get cart items
 // validate cart
 // restore saved cart
 // delete from cart
-// clear cart
 // apply cart discount
 // get cart total
 // create cart
@@ -132,4 +241,4 @@ const updateCart: RequestHandler = async (req: Request, res: Response): Promise<
 // remove coupon from cart
 // estimate shipping for cart
 
-export { addToCart, updateCart };
+export { addToCart, updateCart, clearCart, removeItemFromCart };
