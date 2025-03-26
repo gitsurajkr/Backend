@@ -326,7 +326,7 @@ model Order {
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   totalAmount Float
-  status      String    @default("Pending") // "Pending", "Shipped", "Delivered", etc.
+  status      String    @default("Pending") 
   items       OrderItem[]
   
   createdAt   DateTime  @default(now())
