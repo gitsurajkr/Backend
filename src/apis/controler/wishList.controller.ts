@@ -24,7 +24,7 @@ const addToWishList: RequestHandler = async (req: Request, res: Response): Promi
 
     // Check if item is already in wishlist
     const existingItem = await prisma.wishlist.findUnique({
-      where: { userId_productId: { userId, productId } },
+      where: { buyerId_productId: { buyerId: userId, productId } },
     });
 
     if (existingItem) {
@@ -34,7 +34,7 @@ const addToWishList: RequestHandler = async (req: Request, res: Response): Promi
 
     // Add product to wishlist
     const newWishListItem = await prisma.wishlist.create({
-      data: { userId, productId },
+      data: { buyerId: userId, productId },
     });
 
     res.status(201).json(newWishListItem);
@@ -57,7 +57,7 @@ const removeFromWishList: RequestHandler = async (req: Request, res: Response): 
     }
 
     const existingItem = await prisma.wishlist.findUnique({
-      where: { userId_productId: { userId, productId } },
+      where: { buyerId_productId: { buyerId: userId, productId } },
     });
 
     if (!existingItem) {
@@ -66,7 +66,7 @@ const removeFromWishList: RequestHandler = async (req: Request, res: Response): 
     }
 
     await prisma.wishlist.delete({
-      where: { userId_productId: { userId, productId } },
+      where: { buyerId_productId: { buyerId: userId, productId } },
     });
 
     res.status(200).json({ message: "Item removed from wishlist." });
@@ -88,7 +88,7 @@ const getWishList: RequestHandler = async (req: Request, res: Response): Promise
     }
 
     const wishListItems = await prisma.wishlist.findMany({
-      where: { userId },
+      where: { buyerId: userId },
       include: { product: true }, // Include product details
     });
 
@@ -113,7 +113,7 @@ const moveWishListToCart: RequestHandler = async (req: Request, res: Response): 
 
     // Check if the item exists in the wishlist
     const existingItem = await prisma.wishlist.findUnique({
-      where: { userId_productId: { userId, productId } },
+      where: { buyerId_productId: { buyerId: userId, productId } },
     });
 
     if (!existingItem) {
@@ -123,7 +123,7 @@ const moveWishListToCart: RequestHandler = async (req: Request, res: Response): 
 
     // Remove from wishlist
     await prisma.wishlist.delete({
-      where: { userId_productId: { userId, productId } },
+      where: { buyerId_productId: { buyerId: userId, productId } },
     });
 
     // Add to cart
@@ -149,7 +149,7 @@ const clearWishList: RequestHandler = async (req: Request, res: Response): Promi
       return;
     }
 
-    await prisma.wishlist.deleteMany({ where: { userId } });
+    await prisma.wishlist.deleteMany({ where: { buyerId: userId } });
 
     res.status(200).json({ message: "Wishlist cleared." });
   } catch (error) {
@@ -168,7 +168,7 @@ const getWishListCount: RequestHandler = async (req: Request, res: Response): Pr
       return;
     }
 
-    const count = await prisma.wishlist.count({ where: { userId } });
+    const count = await prisma.wishlist.count({ where: { buyerId: userId } });
 
     res.status(200).json({ count });
   } catch (error) {

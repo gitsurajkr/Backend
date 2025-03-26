@@ -37,10 +37,8 @@ model User {
   // Relations
   Buyer Buyer?  
   Seller Seller? 
-  Wishlist Wishlist[]
-  Reviews Review[]
-  cart Cart[]
-  order Order[]
+
+
 }
 
 model RefreshToken{
@@ -56,8 +54,14 @@ model Buyer {
   id   String @id @default(uuid()) @map("userId")
   BuyerId String @unique
   user User   @relation( fields: [BuyerId], references: [id])
-  address String
-  review Review[]
+
+   // Relations
+  cart Cart?
+  orders Order[]
+  wishlist Wishlist[]
+  reviews Review[]
+  address Address[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -79,6 +83,7 @@ model Seller {
   // Relations
   products Product[]
   reviews Review[]
+  orders Order[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -256,20 +261,21 @@ model ProductImage {
 
 model Wishlist {
   id String @id @default(uuid())
-  userId String
+  buyerId String
   productId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  buyer Buyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, productId])
+  @@unique([buyerId, productId])
 }
 
 model Review {
   id String @id @default(uuid())
-  userId String 
+  buyerId String 
   rating Float
   review String
    
@@ -277,11 +283,10 @@ model Review {
 
   productId String
   sellerId String
-  buyerId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  buyer  Buyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   seller  Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  buyer  Buyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   
 
   createdAt DateTime @default(now())
@@ -292,8 +297,10 @@ model Review {
 
 model Cart{
   id String @id @default(uuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  buyerId String @unique
+
+  buyer Buyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  
   items CartItems[]
   totalPrice Float @default(0.0)
 
@@ -323,8 +330,12 @@ model CartItems {
 
 model Order {
   id          String    @id @default(uuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+   buyerId     String
+  sellerId    String
+
+  buyer       Buyer     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  seller      Seller    @relation(fields: [sellerId], references: [sellerId])
+
   totalAmount Float
   status      String    @default("Pending") 
   items       OrderItem[]
@@ -346,4 +357,24 @@ model OrderItem {
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model Address {
+  id String @id @default(uuid())
+  buyerId String
+  buyer Buyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+
+  fullName String
+  phoneNumber String
+  address1 String
+  address2 String?
+  pincode String
+  city String
+  landmark String?
+  state String
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+ 
 }

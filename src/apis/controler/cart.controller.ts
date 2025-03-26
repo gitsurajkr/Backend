@@ -23,7 +23,8 @@ const addToCart: RequestHandler = async (req: Request, res: Response): Promise<v
     if (!cart) {
       cart = await prisma.cart.create({
         data: {
-          userId,
+          buyerId: userId,
+          totalPrice: price * quantity,
           items: {
             create: [
               {
@@ -395,7 +396,7 @@ const applyCartDiscount: RequestHandler = async (req: Request, res: Response): P
 
     // Find the user's cart
     const cart = await prisma.cart.findFirst({
-      where: { userId },
+      where: { buyerId: userId },
       include: {
         items: {
           include: { product: true },
@@ -476,9 +477,14 @@ const checkoutCart: RequestHandler = async (req: Request, res: Response) => {
 
     const order = await prisma.order.create({
       data: {
-        userId: userid,
+        buyer: {
+          connect: { id: userid },
+        },
         totalAmount: totalPrice,
         status: "Pending",
+        seller: {
+          connect: { id: cart.items[0]?.product.sellerId }, // Assuming the first item's seller is used
+        },
         items: {
           create: cart.items.map((item) => ({
             productId: item.productId,
@@ -518,22 +524,22 @@ const checkoutCart: RequestHandler = async (req: Request, res: Response) => {
 };
 
 const createOrder: RequestHandler = async (req: Request, res: Response): Promise<void> => {
-  const { userId, totalAmount, status, items } = req.body;
+  const { buyerId, totalAmount, status, items } = req.body;
 
-  if (!userId || !totalAmount || !items || !Array.isArray(items) || items.length === 0) {
+  if (!buyerId || !totalAmount || !items || !Array.isArray(items) || items.length === 0) {
     res.status(400).json({ message: "Invalid order data" });
     return;
   }
 
   try {
-    // Fetch user details
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, name: true },
+    // Fetch buyer details
+    const buyer = await prisma.buyer.findUnique({
+      where: { id: buyerId },
+      select: { user: { select: { email: true, name: true } } },
     });
 
-    if (!user) {
-      res.status(404).json({ message: "User not found" });
+    if (!buyer) {
+      res.status(404).json({ message: "Buyer not found" });
       return;
     }
 
@@ -543,12 +549,11 @@ const createOrder: RequestHandler = async (req: Request, res: Response): Promise
       select: {
         id: true,
         title: true,
+        sellerId: true,
         seller: {
           select: {
             sellerId: true,
-            user: {
-              select: { email: true, name: true },
-            },
+            user: { select: { email: true, name: true } },
           },
         },
       },
@@ -559,37 +564,58 @@ const createOrder: RequestHandler = async (req: Request, res: Response): Promise
       return;
     }
 
-    // Create the order
-    const order = await prisma.order.create({
-      data: {
-        userId,
-        totalAmount: parseFloat(totalAmount),
-        status: status || "Pending",
-        items: {
-          create: items.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: parseFloat(item.price),
-          })),
-        },
-      },
-      include: { items: true },
+    // Group order items by seller
+    const ordersBySeller: Record<
+      string,
+      { items: { productId: string; quantity: number; price: number }[]; totalAmount: number }
+    > = {};
+
+    items.forEach((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      if (!product) return;
+
+      if (!ordersBySeller[product.sellerId]) {
+        ordersBySeller[product.sellerId] = { items: [], totalAmount: 0 };
+      }
+      ordersBySeller[product.sellerId].items.push({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+      });
+      ordersBySeller[product.sellerId].totalAmount += parseFloat(item.price) * item.quantity;
     });
 
-    // Format order details for the user
-    const orderDetails = order.items
-      .map((item) => `- Product ID: ${item.productId}, Quantity: ${item.quantity}, Price: $${item.price}`)
+    // Create orders per seller
+    const createdOrders = await Promise.all(
+      Object.entries(ordersBySeller).map(async ([sellerId, orderData]) => {
+        return prisma.order.create({
+          data: {
+            buyerId: buyerId,
+            sellerId,
+            totalAmount: orderData.totalAmount,
+            status: status || "Pending",
+            items: { create: orderData.items },
+          },
+          include: { items: true },
+        });
+      })
+    );
+
+    // Send Email to Buyer
+    const orderDetails = createdOrders
+      .flatMap((order) =>
+        order.items.map((item) => `- Product ID: ${item.productId}, Quantity: ${item.quantity}, Price: $${item.price}`)
+      )
       .join("\n");
 
-    // Send Email to User
     const userEmailContent = `
-      Hello ${user.name},
+      Hello ${buyer.user.name},
 
       Thank you for your order! Here are your order details:
 
-      Order ID: ${order.id}
-      Total Amount: $${order.totalAmount}
-      Status: ${order.status}
+      Order IDs: ${createdOrders.map((o) => o.id).join(", ")}
+      Total Amount: $${createdOrders.reduce((sum, o) => sum + o.totalAmount, 0)}
+      Status: ${status || "Pending"}
 
       Items:
       ${orderDetails}
@@ -602,53 +628,45 @@ const createOrder: RequestHandler = async (req: Request, res: Response): Promise
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: user.email,
+      to: buyer.user.email,
       subject: "Order Confirmation - Your Order Has Been Placed",
       text: userEmailContent,
     });
 
     // Email to Sellers
-    const sellerEmails: { [email: string]: string[] } = {}; // Group items by seller email
+    for (const order of createdOrders) {
+      const seller = products.find((p) => p.sellerId === order.sellerId)?.seller;
+      if (!seller || !seller.user.email) continue;
 
-    products.forEach((product) => {
-      if (product.seller?.user?.email) {
-        if (!sellerEmails[product.seller.user.email]) {
-          sellerEmails[product.seller.user.email] = [];
-        }
-        sellerEmails[product.seller.user.email].push(
-          `- Product: ${product.title} (ID: ${product.id}), Ordered by: ${user.name}`
-        );
-      }
-    });
+      const sellerOrderDetails = order.items
+        .map((item) => `- Product ID: ${item.productId}, Quantity: ${item.quantity}`)
+        .join("\n");
 
-    for (const [sellerEmail, sellerOrderDetails] of Object.entries(sellerEmails)) {
       const sellerEmailContent = `
         New Order Received!
 
         Order ID: ${order.id}
-        Customer: ${user.name} (${user.email})
+        Customer: ${buyer.user.name} (${buyer.user.email})
         Total Amount: $${order.totalAmount}
 
         Ordered Products:
-        ${sellerOrderDetails.join("\n")}
+        ${sellerOrderDetails}
 
         Please process the order as soon as possible.
       `;
 
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
-        to: sellerEmail,
+        to: seller.user.email,
         subject: "New Order Received",
         text: sellerEmailContent,
       });
     }
 
-    res.status(201).json(order);
-    return;
+    res.status(201).json(createdOrders);
   } catch (error) {
     console.error("Create order error:", error);
     res.status(500).json({ message: "Internal server error", error: (error as Error).message });
-    return;
   }
 };
 
