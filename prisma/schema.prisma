@@ -13,62 +13,308 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  USER
+  BUYER
+  SELLER
+  ADMIN
+}
+
 model User {
-  id          Int      @id @default(autoincrement())
-  email       String   @unique
-  password    String
-  phoneNumber String   @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  Buyer  Buyer?
-  Seller Seller?
-  cart   Cart?   @relation("UserCart")
-  orders Order[]
-
-  @@map("users")
-}
-
-model Buyer {
-  id      Int     @id @default(autoincrement())
-  user    User    @relation(fields: [id], references: [id])
-  address String?
-  budget  Float?
-
-  @@map("buyers")
-}
-
-model Seller {
-  id            Int    @id @default(autoincrement())
-  user          User   @relation(fields: [id], references: [id])
-  storeName     String
-  gstNumber     String @unique
-  adharNumber   String @unique
-  panCardNumber String @unique
-
-  @@map("sellers")
-}
-
-model Cart {
-  id        String   @id @default(uuid())
-  userId    Int      @unique
-  items     Json
+  id String @id @default(uuid())
+  email String @unique 
+  name String
+  password String
+  phoneNumber String?
+  refreshTokens RefreshToken[]
+  role          Role         @default(USER)
+  isVerified    Boolean      @default(false)
+  passwordResetToken PasswordResetToken?
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  user User @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
+  Buyer Buyer?  
+  Seller Seller? 
+  Wishlist Wishlist[]
+  Reviews Review[]
+  cart Cart[]
 }
 
-model Order {
-  id          String   @id @default(uuid())
-  userId      Int
-  items       Json
-  totalAmount Float
-  status      String   @default("pending") // pending, confirmed, shipped, delivered, canceled
+model RefreshToken{
+  id String @id @default(uuid())
+  token String @unique
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Buyer {
+  id   String @id @default(uuid()) @map("userId")
+  BuyerId String @unique
+  user User   @relation( fields: [BuyerId], references: [id])
+  address String
+  review Review[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([id]) 
+}
+
+model Seller {
+  id   String @id @default(uuid()) @map("userId")
+  sellerId String @unique
+  user User  @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  storeName   String
+  aadharCard  String @unique 
+  panCard     String @unique 
+  gstNumber   String? @unique 
+  rating      Float?  
+  isVerified  Boolean @default(false) 
+
+  // Relations
+  products Product[]
+  reviews Review[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
+  @@unique([id]) 
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+
+enum ProductStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+
+enum ProductCategory {
+  MENS
+  WOMENS
+  KIDS
+  OTHER
+}
+
+model Product {
+  id          String           @id @default(uuid())
+  title       String
+  description String
+  price       Float
+  discount    Float?           @default(0.0)
+  category    ProductCategory
+  stock       Int              @default(0)
+  status      ProductStatus    @default(PENDING)
+
+  sellerId    String
+  seller      Seller           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  details     ProductDetails?
+  variants    ProductVariant[]
+  images      ProductImage[]
+  reviews     Review[]
+  wishlist    Wishlist[]
+  bulkUpload  String?
+  specifications Specification?
+  cartItems   CartItems[]
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([price])
+  @@index([sellerId])
+  @@index([category])
+  @@index([status])
+}
+
+model ProductDetails {
+  id String @id @default(uuid())
+  productId String @unique
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  fabricType Json
+  origin String
+  closureType String
+  countryOfOrigin String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([countryOfOrigin])  
+}
+
+model ProductVariant {
+  id          String @id @default(uuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  color       String
+  size        String
+  stock       Int
+  pattern     String
+  occasion    String
+  sleeveLength String
+  types       String
+  neck        String
+  length      String
+  hemline     String
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([size, color])
+}
+
+
+model Specification {
+  id   String @id @default(uuid())
+  productId String @unique
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  upperWear   UpperWear? @relation(name: "UpperWearToSpecification")
+  bottomWear  BottomWear? @relation(name: "BottomWearToSpecification")
+  lowerWear   LowerWear? @relation(name: "LowerWearToSpecification")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UpperWear {
+  id               String  @id @default(uuid())
+  specificationId  String  @unique
+  specification    Specification? @relation(name: "UpperWearToSpecification", fields: [specificationId], references: [id])
+
+  length          String
+  chest           String
+  shoulder        String
+  sleeve          String
+  neck            String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+
+model BottomWear {
+  id            String  @id @default(uuid())
+
+  specification Specification? @relation(name: "BottomWearToSpecification", fields: [specificationId], references: [id])
+  specificationId String @unique
+
+  length        String
+  waist         String
+  hip           String
+  thigh         String
+  knee          String
+  ankle         String
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model LowerWear {
+  id            String  @id @default(uuid())
+
+  specification Specification? @relation(name: "LowerWearToSpecification", fields: [specificationId], references: [id])
+  specificationId String @unique
+
+  length        String
+  waist         String
+  hip           String
+  thigh         String
+  knee          String
+  ankle         String
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+
+model ProductImage {
+  id String @id @default(uuid())
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  url String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Wishlist {
+  id String @id @default(uuid())
+  userId String
+  productId String
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+}
+
+model Review {
+  id String @id @default(uuid())
+  userId String 
+  rating Float
+  review String
+   
+  //  relations
+
+  productId String
+  sellerId String
+  buyerId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  seller  Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  buyer  Buyer @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+}
+
+model Cart{
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItems[]
+  totalPrice Float @default(0.0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+}
+
+model CartItems {
+
+  id String @id @default(uuid())
+  cartId String
+  
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  quantity Int  
+  price Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
 }
