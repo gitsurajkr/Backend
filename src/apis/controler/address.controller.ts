@@ -184,7 +184,7 @@ export const getBuyerAddressForSeller: RequestHandler = async (req: Request, res
   }
 };
 
-export const getDefaultAddress = async (req: Request, res: Response) => {
+export const getDefaultAddress: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = req.user as { id: string };
     const userId = user?.id;
@@ -193,10 +193,16 @@ export const getDefaultAddress = async (req: Request, res: Response) => {
       where: { buyerId: userId, isDefault: true },
     });
 
-    if (!defaultAddress) return res.status(404).json({ message: "No default address found" });
+    if (!defaultAddress) {
+      res.status(404).json({ message: "No default address found" });
+      return;
+    }
 
-    return res.json({ defaultAddress });
+    res.json({ defaultAddress });
+    return;
   } catch (error) {
-    return res.status(500).json({ message: "Error fetching default address", error });
+    console.error("Get Default Address Error:", error);
+    res.status(500).json({ message: "Error fetching default address", error });
+    return;
   }
 };
