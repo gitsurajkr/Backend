@@ -6,6 +6,7 @@ import jwt, { JwtPayload } from "jsonwebtoken";
 import verifyTokenAndGetUser from "../../helper/getUser";
 import nodemailer from "nodemailer";
 import crypto from "crypto";
+import { sendConfirmationEmail, sendOtpEmail, sendSellerVerificationEmail } from "../../utils/email.service";
 
 const JWT_KEY = process.env.JWT_SECRET as string;
 const REFRESH_TOKEN_KEY = process.env.REFRESH_TOKEN_SECRET as string;
@@ -14,8 +15,8 @@ const prisma = new PrismaClient();
 
 // generate access Token which will be store in memory
 
-const generateAccessToken = (user: { id: string; email: string }) => {
-  return jwt.sign({ id: user.id, email: user.email }, JWT_KEY, { expiresIn: "1h" });
+const generateAccessToken = (user: { id: string; email: string; role: string }) => {
+  return jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_KEY, { expiresIn: "1h" });
 };
 
 // generateRefresh token which will bw stored in db
@@ -236,7 +237,11 @@ const refreshToken: RequestHandler = async (req: Request, res: Response): Promis
       return;
     }
 
-    const newAccessToken = generateAccessToken({ id: decodedToken.id, email: decodedToken.email });
+    const newAccessToken = generateAccessToken({
+      id: decodedToken.id,
+      email: decodedToken.email,
+      role: decodedToken.role,
+    });
 
     res.status(200).json({ message: "Token refreshed successfully", token: newAccessToken });
   } catch (error) {
@@ -363,9 +368,8 @@ const deleteUser: RequestHandler = async (req: Request, res: Response) => {
   }
 };
 
-const assignBuyer: RequestHandler = async (req: Request, res: Response): Promise<void> => {
+const sendOtp: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Extract token and verify
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
       res.status(401).json({ message: "Unauthorized: No token provided" });
@@ -374,104 +378,69 @@ const assignBuyer: RequestHandler = async (req: Request, res: Response): Promise
 
     const user = await verifyTokenAndGetUser(token);
 
-    // Ensure user has a valid refresh token (active session)
-    const activeSession = await prisma.refreshToken.findFirst({
-      where: { userId: user.id },
-    });
-
-    if (!activeSession) {
-      res.status(401).json({ message: "Unauthorized: Invalid session" });
-      return;
-    }
-
-    // Prevent sellers from being assigned as buyers
     if (user.role === "SELLER") {
       res.status(403).json({ message: "Sellers cannot register as buyers" });
       return;
     }
 
-    const { address } = req.body;
+    // Check if user already requested an OTP within the last 5 minutes (fixing rate limit issue)
+    const recentOtp = await prisma.otp.findFirst({
+      where: { userId: user.id },
+      orderBy: { expiresAt: "desc" },
+    });
 
-    if (!address) {
-      res.status(400).json({ message: "Address is required" });
+    if (recentOtp && new Date() < new Date(recentOtp.expiresAt.getTime() + 5 * 60 * 1000)) {
+      res.status(429).json({ message: "Too many OTP requests. Try again later." });
       return;
     }
 
-    // Check if user is already a buyer
-    if (user.role === "BUYER") {
-      res.status(409).json({ message: "User is already assigned as a Buyer" });
-      return;
-    }
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // Expires in 10 minutes
 
-    // Assign buyer role
-    await prisma.user.update({
-      where: { id: user.id },
+    // Save OTP in the database
+    await prisma.otp.create({
       data: {
-        role: "BUYER",
-        isVerified: true,
+        userId: user.id,
+        otp,
+        expiresAt,
+        attempts: 0,
       },
     });
 
-    await prisma.buyer.create({
-      data: {
-        BuyerId: user.id,
-        address,
-      },
-    });
+    const subject = "Your OTP Code";
+    const message = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+      <h2 style="color: #4CAF50;">Your OTP Code</h2>
+      <p>Hello <strong>${user.name || "User"}</strong>,</p>
+      
+      <p>Your OTP for ${user.role ? user.role.toLowerCase() : "your account"} registration is:</p>
+      
+      <div style="background: #f4f4f4; padding: 15px; font-size: 18px; font-weight: bold; text-align: center; border-radius: 5px;">
+        ${otp}
+      </div>
+  
+      <p>This OTP is valid for <strong>10 minutes</strong>. Please do not share this code with anyone.</p>
+  
+      <p>If you did not request this, you can safely ignore this email.</p>
+  
+      <hr style="border: 0; height: 1px; background: #ddd; margin: 20px 0;">
+      
+      <p style="color: #888;">Best Regards, <br> <strong>Your Team</strong></p>
+    </div>
+  `;
 
-    res.status(201).json({ message: "User assigned as buyer" });
+    // Send OTP via email
+    await sendOtpEmail(user.email, subject, message);
+
+    res.status(200).json({ message: "OTP sent to email" });
   } catch (error) {
-    console.error("Error assigning buyer:", (error as Error).message);
+    console.error("Error sending OTP:", (error as Error).message);
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
-const assignSeller: RequestHandler = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
-
-    if (!token) {
-      res.status(401).json({ message: "Unauthorized: Token required" });
-      return;
-    }
-
-    const user = await verifyTokenAndGetUser(token);
-
-    if (user.role === "BUYER") {
-      res.status(403).json({ message: "Buyers cannot register as sellers" });
-      return;
-    }
-
-    const { storeName, aadharCard, panCard, gstNumber } = req.body;
-
-    if (!storeName || !aadharCard || !panCard) {
-      res.status(400).json({ message: "All fields are required" });
-      return;
-    }
-
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: user.id },
-        data: { role: "SELLER" },
-      }),
-      prisma.seller.create({
-        data: { sellerId: user.id, storeName, aadharCard, panCard, gstNumber },
-      }),
-    ]);
-    res.status(201).json({
-      message: "Seller registration in progress, awaiting verification",
-    });
-  } catch (error) {
-    if (error instanceof Error && error.message === "User is already a seller") {
-      res.status(409).json({ message: error.message });
-    } else {
-      console.error("Error assigning seller:", error);
-      res.status(500).json({ message: "Internal server error" });
-    }
-  }
-};
-
-const verifySeller: RequestHandler = async (req: Request, res: Response) => {
+const verifyOtpAndAssignRole: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
@@ -479,50 +448,153 @@ const verifySeller: RequestHandler = async (req: Request, res: Response) => {
       return;
     }
 
-    const admin = await verifyTokenAndGetUser(token);
+    let user;
+    try {
+      user = await verifyTokenAndGetUser(token);
+    } catch (error) {
+      console.error("Invalid Token:", error);
+      res.status(401).json({ message: "Invalid or expired token" });
+      return;
+    }
 
+    const { otp, role, storeName, aadharCard, panCard, gstNumber } = req.body;
+
+    if (!role || !["BUYER", "SELLER"].includes(role)) {
+      res.status(400).json({ message: "Invalid role. Must be BUYER or SELLER." });
+      return;
+    }
+
+    // Convert OTP to string
+    const storedOtp = await prisma.otp.findFirst({
+      where: { userId: user.id, otp: otp.toString() },
+      orderBy: { expiresAt: "desc" },
+    });
+
+    if (!storedOtp || new Date() > storedOtp.expiresAt) {
+      res.status(400).json({ message: "Invalid or expired OTP" });
+      return;
+    }
+
+    if (storedOtp.attempts >= 5) {
+      await prisma.otp.delete({ where: { id: storedOtp.id } });
+      res.status(429).json({ message: "Too many failed attempts. Request a new OTP." });
+      return;
+    }
+
+    if (role === "SELLER") {
+      // Validate required fields for a seller
+      if (!storeName || !aadharCard || !panCard || !gstNumber) {
+        res.status(400).json({ message: "Missing required seller details." });
+        return;
+      }
+
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: user.id }, data: { role: "SELLER" } }),
+        prisma.seller.create({ data: { sellerId: user.id, storeName, aadharCard, panCard, gstNumber } }),
+      ]);
+
+      // Send seller verification email
+      await sendSellerVerificationEmail(user.email, user.name);
+    } else {
+      // Assign as a buyer
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: user.id }, data: { role: "BUYER", isVerified: true } }),
+        prisma.buyer.create({ data: { BuyerId: user.id } }),
+      ]);
+
+      // Send buyer verification email
+      await sendConfirmationEmail(user.email, user.name);
+    }
+
+    // Delete OTP after successful verification
+    await prisma.otp.delete({ where: { id: storedOtp.id } });
+
+    res.status(200).json({ message: `${role} assigned successfully` });
+  } catch (error) {
+    console.error("Error verifying OTP:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+const verifySeller: RequestHandler = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      res.status(401).json({ message: "Unauthorized: No token provided" });
+      return;
+    }
+
+    let admin;
+    try {
+      admin = await verifyTokenAndGetUser(token);
+    } catch (error) {
+      console.error("Invalid Token:", error);
+      res.status(401).json({ message: "Unauthorized: Invalid or expired token" });
+      return;
+    }
+
+    // Only allow ADMIN users
     if (admin.role !== "ADMIN") {
       res.status(403).json({ message: "Forbidden: Only admins can verify sellers" });
       return;
     }
 
+    // 📛 Validate email input (prevent SQL injections)
     const { email } = req.body;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      res.status(400).json({ message: "Invalid email address" });
+      return;
+    }
 
+    // 🔍 Fetch user
     const user = await prisma.user.findUnique({ where: { email } });
-
     if (!user) {
       res.status(404).json({ message: "User not found" });
       return;
     }
 
+    // 🔍 Fetch seller details
     const seller = await prisma.seller.findUnique({ where: { sellerId: user.id } });
-
     if (!seller) {
       res.status(404).json({ message: "Seller not found" });
       return;
     }
 
+    // ✅ If already verified, no need to proceed
     if (seller.isVerified) {
       res.status(400).json({ message: "Seller is already verified" });
       return;
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { isVerified: true },
-    });
-    await prisma.seller.update({
-      where: { sellerId: seller.id },
-      data: { isVerified: true },
-    });
+    // 🔄 Perform transaction to update user & seller
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: user.id }, data: { isVerified: true } }),
+      prisma.seller.update({ where: { sellerId: user.id }, data: { isVerified: true } }),
+    ]);
 
-    const updatedSeller = await prisma.seller.findUnique({ where: { sellerId: user.id } });
-    console.log("After update:", updatedSeller);
+    // 📧 Improved confirmation email with store name
+    const subject = "Your Seller Account is Verified!";
+    // const message = `
+    //   <div style="font-family: Arial, sans-serif; max-width: 600px; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+    //     <h2 style="color: #4CAF50;">Congratulations!</h2>
+    //     <p>Hello <strong>${user.name || "Seller"}</strong>,</p>
+
+    //     <p>Your store <strong>${seller.storeName}</strong> has been successfully verified.</p>
+
+    //     <p>You can now start selling on our platform. Log in to your account to manage your store.</p>
+
+    //     <hr style="border: 0; height: 1px; background: #ddd; margin: 20px 0;">
+
+    //     <p style="color: #888;">Best Regards, <br> <strong>Your Team</strong></p>
+    //   </div>
+    // `;
+
+    await sendConfirmationEmail(user.email, subject);
 
     res.status(200).json({ message: "Seller verified successfully" });
   } catch (error) {
-    console.error("Error verifying seller:", (error as Error).message);
-    res.status(500).json({ message: "Internal server error" });
+    console.error("Error verifying seller:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -694,28 +766,8 @@ const getAllSellers: RequestHandler = async (req: Request, res: Response): Promi
 
 // get Seller by id
 
-const getAllBuyers: RequestHandler = async (req: Request, res: Response) => {
-  const token = req.headers.authorization?.split(" ")[1];
-
-  if (!token) {
-    res.status(401).json({ message: "Unauthorized: No token provided" });
-    return;
-  }
-
+const getAllBuyers: RequestHandler = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await verifyTokenAndGetUser(token);
-
-    if (!user) {
-      res.status(404).json({ message: "User not found" });
-      return;
-    }
-
-    // Check if user has the right role to access buyers
-    if (user.role !== "ADMIN" && user.role !== "SELLER") {
-      res.status(403).json({ message: "Forbidden: Only admins and sellers can access this resource" });
-      return;
-    }
-
     // Fetch all buyers from the database
     const buyers = await prisma.user.findMany({
       where: { role: "BUYER" },
@@ -726,9 +778,11 @@ const getAllBuyers: RequestHandler = async (req: Request, res: Response) => {
       message: buyers.length > 0 ? "Buyers retrieved successfully" : "No buyers found",
       buyers,
     });
+    return;
   } catch (error) {
     console.error("Error fetching buyers:", (error as Error).message || error);
     res.status(500).json({ message: "Internal server error" });
+    return;
   }
 };
 
@@ -989,8 +1043,8 @@ export {
   updateUser,
   getUser,
   deleteUser,
-  assignBuyer,
-  assignSeller,
+  sendOtp,
+  verifyOtpAndAssignRole,
   verifySeller,
   logoutUser,
   refreshToken,

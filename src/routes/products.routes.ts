@@ -1,5 +1,7 @@
 import { Router } from "express";
-import { authenticateUser, isAdmin, isAdminOrSeller } from "../middleware/auth.middleware";
+
+import { ProductSchema } from "../validators/product.validators";
+
 import {
   addProduct,
   deleteProductById,
@@ -7,6 +9,7 @@ import {
   getProductByCategory,
   getProductById,
   getProductByName,
+  getProductsByPagination,
   getProductBySellerId,
   getProductsByPriceRange,
   productSortByPriceOrRating,
@@ -20,34 +23,60 @@ import {
   bulkUploadProduct,
   bulkDeleteProducts,
 } from "../apis/controler/product.controller";
+import { authenticateUser, isAdmin, isAdminOrSeller } from "../middleware/auth.middleware";
+import { isSeller, validate, validateProductQuery, validateUUID } from "../middleware/product.middleware";
 
 const productRoutes = Router();
 
 // productRoutes.
-productRoutes.post("/add-product", authenticateUser, isAdminOrSeller, addProduct);
-productRoutes.delete("/delete-product", authenticateUser, isAdminOrSeller, deleteProductById);
-productRoutes.patch("update-product/:id", authenticateUser, isAdminOrSeller, updateProductById);
-productRoutes.get("get-all-prpducts", authenticateUser, getAllProducts);
-productRoutes.get("get-products/:id", authenticateUser, getProductById);
-productRoutes.get("get-product-by-seller/:id", authenticateUser, isAdminOrSeller, getProductBySellerId);
-productRoutes.get("products-by-category/", authenticateUser, getProductByCategory);
-// tested as GET /products-by-category?category=value
-productRoutes.get("get-product-by-range", authenticateUser, getProductsByPriceRange);
-productRoutes.get("/products-by-name", authenticateUser, getProductByName);
-productRoutes.get("/product-by-pagination", authenticateUser, getProductByName);
-productRoutes.get("/product-sort-by-rating", authenticateUser, productSortByPriceOrRating);
-productRoutes.get("/discount-products", authenticateUser, discountProducts);
-productRoutes.get("/verify-all-products", authenticateUser, isAdmin, verifyAllProducts);
-productRoutes.get(
-  "/get-all-products-left-for-verification",
+productRoutes.post(
+  "/products",
   authenticateUser,
-  isAdmin,
-  getAllProductsLeftForVerification
+  isSeller,
+  validate(ProductSchema.omit({ sellerId: true, status: true })),
+  addProduct
 );
-productRoutes.post("/products/verify/:id", authenticateUser, verifyProductById);
-productRoutes.get("/products/verify/:email", authenticateUser, isAdmin, verifyProductOfSellerEmailByAdmin);
-productRoutes.get("/get-product-by-seller-with-status", authenticateUser, getProductBySellerWithStatus);
-productRoutes.get("/bulk-upload-product", authenticateUser, isAdminOrSeller, bulkUploadProduct);
-productRoutes.delete("/bulk-delete-products", authenticateUser, isAdminOrSeller, bulkDeleteProducts);
+
+productRoutes.delete("/products/:productId", authenticateUser, validateUUID("productId"), deleteProductById);
+
+productRoutes.patch(
+  "/products/:productId",
+  authenticateUser,
+  validateUUID("productId"),
+  validate(ProductSchema.partial()),
+  updateProductById
+);
+
+productRoutes.get("/products", authenticateUser, validateProductQuery, getAllProducts);
+
+productRoutes.get("/products/:productId", authenticateUser, validateUUID("productId"), getProductById);
+
+productRoutes.get("/products/seller/:sellerId", authenticateUser, validateUUID("sellerId"), getProductBySellerId);
+
+productRoutes.get("/products/category", authenticateUser, getProductByCategory); // Uses query param: `/products/category?category=value`
+
+productRoutes.get("/products/price-range", authenticateUser, getProductsByPriceRange); // Uses query param: `/products/price-range?min=10&max=100`
+
+productRoutes.get("/products/name", authenticateUser, getProductByName); // Uses query param: `/products/name?name=value`
+
+productRoutes.get("/products/paginated", authenticateUser, getProductsByPagination);
+
+productRoutes.get("/products/sorted-by-rating", authenticateUser, productSortByPriceOrRating);
+
+productRoutes.get("/products/discounted", authenticateUser, discountProducts);
+
+productRoutes.put("/products/verify-all", authenticateUser, isAdmin, verifyAllProducts);
+
+productRoutes.get("/products/pending-verification", authenticateUser, isAdmin, getAllProductsLeftForVerification);
+
+productRoutes.put("/products/verify/:id", authenticateUser, validateUUID("id"), verifyProductById);
+
+productRoutes.get("/products/verify/seller/:email", authenticateUser, isAdmin, verifyProductOfSellerEmailByAdmin);
+
+productRoutes.get("/products/seller/:sellerId/status/:status", authenticateUser, getProductBySellerWithStatus);
+
+productRoutes.post("/products/bulk-upload", authenticateUser, isAdminOrSeller, bulkUploadProduct);
+
+productRoutes.delete("/products/bulk-delete", authenticateUser, isAdminOrSeller, bulkDeleteProducts);
 
 export default productRoutes;

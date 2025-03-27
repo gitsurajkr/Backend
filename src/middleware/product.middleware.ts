@@ -1,15 +1,48 @@
-import { NextFunction, Request, Response } from "express";
-import { ZodSchema } from "zod";
+import { NextFunction, Request, RequestHandler, Response } from "express";
+import { ZodSchema, z } from "zod";
+import { JwtPayload } from "jsonwebtoken";
+import { querySchema } from "../validators/product.validators";
+
+const uuidSchema = z.string().uuid();
 
 export const validate = (schema: ZodSchema<unknown>) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    try {
-      req.body = schema.safeParse(req.body);
-      next();
-    } catch (error) {
-      res.status(400).json({
-        error: (error as Error).message,
-      });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.format() });
+      return;
     }
+    req.body = parsed.data; // Ensure parsed data is available
+    next();
   };
+};
+
+export const validateUUID = (paramName: string) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const parsed = uuidSchema.safeParse(req.params[paramName]);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid UUID format" });
+      return;
+    }
+    next();
+  };
+};
+
+export const isSeller: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
+  const user = req.user as JwtPayload;
+  if (user.role !== "SELLER") {
+    res.status(403).json({ error: "Only sellers can perform this action" });
+    return;
+  }
+  next();
+};
+
+export const validateProductQuery: RequestHandler = (req, res, next) => {
+  const validatedQuery = querySchema.safeParse(req.query);
+  if (!validatedQuery.success) {
+    res.status(400).json({ error: validatedQuery.error.errors[0].message });
+    return;
+  }
+  req.query = validatedQuery.data;
+  next();
 };

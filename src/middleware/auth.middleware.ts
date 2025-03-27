@@ -27,8 +27,14 @@ export const authenticateUser: RequestHandler = (req: Request, res: Response, ne
       return;
     }
 
-    const decodedToken = jwt.verify(token, JWT_KEY as string) as JwtPayload;
+    const decodedToken = jwt.verify(token, JWT_KEY as string) as JwtPayload & { role: string };
     console.log("Decoded Token:", decodedToken);
+
+    if (!decodedToken.role) {
+      console.error("JWT does not contain role");
+      res.status(400).json({ message: "Invalid token structure" });
+      return;
+    }
 
     req.user = decodedToken;
 
@@ -130,6 +136,14 @@ export const isSeller = (req: Request, res: Response, next: NextFunction) => {
 export const isAdminOrSeller = (req: Request, res: Response, next: NextFunction): void => {
   if (!req.user || !["ADMIN", "SELLER"].includes((req.user as JwtPayload).role)) {
     res.status(403).json({ message: "Forbidden: Only admins and sellers can perform this action" });
+    return;
+  }
+  next();
+};
+
+export const isAdminBuyerOrSeller = (req: Request, res: Response, next: NextFunction): void => {
+  if (!req.user || !["ADMIN", "SELLER", "BUYER"].includes((req.user as JwtPayload).role)) {
+    res.status(403).json({ message: "Forbidden: Only admins, sellers and buyers can perform this action" });
     return;
   }
   next();

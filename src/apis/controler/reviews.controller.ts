@@ -75,7 +75,6 @@ const addReviewsByBuyer = async (req: Request, res: Response) => {
         buyerId: buyer.id,
         rating,
         review,
-        userId: user.id,
         sellerId: product.sellerId,
       },
     });
