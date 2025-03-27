@@ -37,6 +37,7 @@ model User {
   // Relations
   Buyer Buyer?  
   Seller Seller? 
+  otp Otp?
 
 
 }
@@ -49,6 +50,16 @@ model RefreshToken{
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model Otp {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  otp       String
+  expiresAt DateTime
+  attempts  Int      @default(0)  // Track failed attempts
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 
 model Buyer {
   id   String @id @default(uuid()) @map("userId")

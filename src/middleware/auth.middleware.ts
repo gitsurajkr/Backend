@@ -27,8 +27,14 @@ export const authenticateUser: RequestHandler = (req: Request, res: Response, ne
       return;
     }
 
-    const decodedToken = jwt.verify(token, JWT_KEY as string) as JwtPayload;
+    const decodedToken = jwt.verify(token, JWT_KEY as string) as JwtPayload & { role: string };
     console.log("Decoded Token:", decodedToken);
+
+    if (!decodedToken.role) {
+      console.error("JWT does not contain role");
+      res.status(400).json({ message: "Invalid token structure" });
+      return;
+    }
 
     req.user = decodedToken;
 
