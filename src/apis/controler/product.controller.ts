@@ -20,7 +20,7 @@ const addProduct: RequestHandler = async (req: Request, res: Response): Promise<
 
     // ✅ Find seller using user.id
     const existingSeller = await prisma.seller.findUnique({
-      where: { sellerId: user.sellerId }, // 🛠️ Fix: Use `user.id`
+      where: { sellerId: user.id },
     });
 
     console.log("Decoded Token:", user);
@@ -38,7 +38,7 @@ const addProduct: RequestHandler = async (req: Request, res: Response): Promise<
       data: {
         ...req.body,
         status: "PENDING",
-        sellerId: existingSeller.sellerId, // 🛠️ Fix: Use Seller's `id`
+        sellerId: existingSeller.id, // 🛠️ Fix: Use Seller's `id`
       },
     });
 
@@ -86,7 +86,7 @@ const deleteProductById: RequestHandler = async (req: Request, res: Response): P
 
     // ✅ Fetch the seller using user.sellerId
     const existingSeller = await prisma.seller.findUnique({
-      where: { sellerId: user.sellerId }, // 🛠️ Fix: Use sellerId instead of user.id
+      where: { sellerId: user.id },
     });
 
     if (!existingSeller) {
@@ -114,7 +114,7 @@ const deleteProductById: RequestHandler = async (req: Request, res: Response): P
     console.log("Product Seller ID:", product.sellerId);
 
     // ✅ Authorization check: Only Admin or Product's Seller can delete
-    if (user.role !== "ADMIN" && product.sellerId !== existingSeller.sellerId) {
+    if (user.role !== "ADMIN" || product.sellerId !== existingSeller.id) {
       console.log("Authorization Failed: User is not Admin or Product Owner");
       res.status(403).json({ error: "Forbidden: You cannot delete this product" });
       return;
@@ -149,7 +149,7 @@ const updateProductById: RequestHandler = async (req: Request, res: Response): P
     // ✅ Find product in DB
     const product = await prisma.product.findUnique({
       where: { id: productId },
-      select: { id: true, sellerId: true }, // Only fetch necessary fields
+      select: { id: true, sellerId: true },
     });
 
     if (!product) {
@@ -161,7 +161,7 @@ const updateProductById: RequestHandler = async (req: Request, res: Response): P
 
     // ✅ Fetch seller using user.sellerId
     const existingSeller = await prisma.seller.findUnique({
-      where: { sellerId: user.sellerId }, // 🛠️ Fix: Use sellerId instead of user.id
+      where: { sellerId: user.id },
     });
 
     if (!existingSeller) {
@@ -170,11 +170,10 @@ const updateProductById: RequestHandler = async (req: Request, res: Response): P
     }
 
     console.log("User Role:", user.role);
-    console.log("Found Seller ID:", existingSeller.sellerId);
+    console.log("Found Seller ID:", existingSeller.id);
 
-    // ✅ Authorization Check: Only Admin or the Product's Seller can update
-    if (user.role !== "ADMIN" && product.sellerId !== existingSeller.sellerId) {
-      res.status(403).json({ error: "Unauthorized: You cannot update this product" });
+    if (!product || product.sellerId !== existingSeller.id) {
+      res.status(403).json({ message: "Unauthorized to update this product." });
       return;
     }
 
@@ -186,11 +185,6 @@ const updateProductById: RequestHandler = async (req: Request, res: Response): P
     }
 
     const updateData = parsedData.data;
-
-    // ✅ Only Admin can update `status`
-    if (user.role !== "ADMIN") {
-      delete updateData.status;
-    }
 
     // ✅ Update product
     const updatedProduct = await prisma.product.update({
@@ -210,13 +204,14 @@ const getAllProducts: RequestHandler = async (req: Request, res: Response): Prom
     const user = req.user as JwtPayload;
     const { page, limit, category, status } = req.query as Record<string, string>;
 
-    // ✅ Ensure valid pagination values
+    //  Ensure valid pagination values
     const pageNumber = !Number.isNaN(Number(page)) && Number(page) > 0 ? Number(page) : 1;
     const limitNumber = !Number.isNaN(Number(limit)) && Number(limit) > 0 ? Math.min(Number(limit), 100) : 10;
     const skip = (pageNumber - 1) * limitNumber;
 
     // ✅ Construct product filter
     const where = buildProductFilter(user, category, status);
+    console.log("Product filter:", where);
     if (!where) {
       res.status(403).json({ error: "Unauthorized: You cannot view products" });
       return;
@@ -291,7 +286,7 @@ const getProductById: RequestHandler = async (req: Request, res: Response): Prom
 
     const user = req.user as JwtPayload;
 
-    if (user.role !== "ADMIN" && product.sellerId !== user.id) {
+    if (user.role !== "ADMIN" || product.sellerId !== user.id) {
       res.status(403).json({ error: "Unauthorized: You cannot view this product" });
       return;
     }
@@ -320,7 +315,7 @@ const getProductBySellerId: RequestHandler = async (req: Request, res: Response)
 
     const user = req.user as JwtPayload;
 
-    if (user.role !== "ADMIN" && user.id !== seller.sellerId) {
+    if (user.role !== "ADMIN" || user.id !== seller.sellerId) {
       res.status(403).json({ error: "Unauthorized: You cannot access these products" });
       return;
     }
